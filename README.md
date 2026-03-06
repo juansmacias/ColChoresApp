@@ -1,0 +1,402 @@
+# Family Chores App
+
+A Flutter mobile application that helps families coordinate household chores, build responsibility in children, and make invisible household labor visible. Designed for real family life: works offline, syncs across devices, and supports every family member from a 3-year-old to a working parent.
+
+---
+
+## Why This App Exists
+
+Families don't need another task list. They need to solve three problems:
+
+1. **The mental load problem** — One parent (usually Mom) carries the burden of remembering, reminding, and chasing everyone. The app offloads coordination to a shared system.
+2. **The parenting problem** — Chores are a tool for teaching responsibility. The app makes contribution structured, visible, and motivating for kids.
+3. **The fairness problem** — "I feel like I do everything" has no answer without data. The app creates shared visibility so conversations about fairness are fact-based, not emotional.
+
+See [docs/jobs-to-be-done.md](docs/jobs-to-be-done.md) for the full JTBD analysis.
+
+---
+
+## Core Design Decisions
+
+### Offline-First
+
+The app works fully without internet. Tasks are created, assigned, completed, and viewed from a local database (Isar). Changes sync to Firebase when connectivity is available. The user never waits for a server round-trip.
+
+This is non-negotiable. Families use the app in kitchens, basements, and backyards where Wi-Fi drops. An app that fails without internet gets abandoned.
+
+### Multi-User, Shared Devices
+
+A kitchen tablet can serve the whole family. Profile switching is instant. Children don't need accounts — they are profiles managed by parents. Parents authenticate once with Firebase Auth; children tap their avatar to see their tasks.
+
+### PIN Protection for Parents
+
+Sensitive actions (settings, task management, fairness data, rewards) are gated by a 4-6 digit PIN. This isn't about security from the outside (Firebase Auth handles that). It's about preventing a 10-year-old from editing his own chore list on the family tablet.
+
+### Age-Appropriate UI
+
+Alex (10) gets a clean Material Design 3 interface with gamification. Emma (3) gets a separate picture-based view with 56px touch targets and 2.5-second confetti celebrations. Same app, different experience.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| **Framework** | Flutter | Cross-platform (iOS + Android), single codebase, M3 native support |
+| **State Management** | BLoC / Cubit | Strict separation of UI and logic, stream-based reactivity, excellent testability |
+| **Local Database** | Isar | NoSQL (maps naturally to Firestore documents), full query support, multi-isolate |
+| **Remote Database** | Cloud Firestore | Real-time sync, offline SDK, security rules, scales with Firebase ecosystem |
+| **Authentication** | Firebase Auth | Email, Google, Apple sign-in. Handles tokens, session persistence |
+| **Backend Logic** | Cloud Functions for Firebase | Server-authoritative operations (points, notifications, invite codes) |
+| **Push Notifications** | Firebase Cloud Messaging | Task reminders, completion alerts |
+| **Crash Reporting** | Firebase Crashlytics | Production error tracking |
+| **Analytics** | Firebase Analytics | Usage patterns and feature adoption |
+| **Routing** | go_router | Declarative, deep links, guard-based navigation (auth + PIN gates) |
+| **DI** | get_it + injectable | Compile-time dependency injection, supports DIP |
+| **Animations** | Lottie | Celebration overlays, lightweight, prebuilt assets |
+| **Charts** | fl_chart | Fairness dashboard contribution visualizations |
+| **Font** | Nunito (via google_fonts) | Rounded, welcoming, matches iOS Reminders aesthetic |
+
+---
+
+## Architecture
+
+```
++------------------------------------------------------------------+
+|                        PRESENTATION LAYER                         |
+|                                                                   |
+|  +------------------+  +------------------+  +----------------+  |
+|  |   Dashboard      |  |   Task List      |  |  Emma's View   |  |
+|  |   Screen         |  |   Screen         |  |  (Simplified)  |  |
+|  +--------+---------+  +--------+---------+  +-------+--------+  |
+|           |                      |                    |           |
+|  +--------v---------+  +--------v---------+  +-------v--------+  |
+|  |  DashboardCubit  |  |   TaskListBloc   |  | EmmaViewCubit  |  |
+|  +--------+---------+  +--------+---------+  +-------+--------+  |
++-----------+----------------------+--------------------+-----------+
+            |                      |                    |
++-----------v----------------------v--------------------v-----------+
+|                        DOMAIN LAYER                               |
+|                                                                   |
+|  +------------------+  +------------------+  +----------------+  |
+|  |  ChoreService    |  | RewardService    |  | FamilyService  |  |
+|  +--------+---------+  +--------+---------+  +-------+--------+  |
+|           |                      |                    |           |
+|  +--------v----------------------v--------------------v--------+  |
+|  |                   Repository Interfaces                     |  |
+|  |  TaskRepository | RewardRepository | FamilyRepository       |  |
+|  +-----------+----------------------------+--------------------+  |
++--------------+----------------------------+-----------------------+
+               |                            |
++--------------v----------------------------v-----------------------+
+|                         DATA LAYER                                |
+|                                                                   |
+|  +----------------------------+  +-----------------------------+  |
+|  |   Local Data Source        |  |   Remote Data Source        |  |
+|  |   (Isar Database)         |  |   (Firestore)              |  |
+|  +------------+---------------+  +-------------+---------------+  |
+|               |                                |                  |
+|  +------------v--------------------------------v---------------+  |
+|  |                      SYNC ENGINE                            |  |
+|  |  Operation Queue | Conflict Resolver | Connectivity Monitor |  |
+|  +---------------------------------------------------------+   |  |
++----------------------------------------------------------------+  |
++-------------------------------------------------------------------+
+|                     CROSS-CUTTING CONCERNS                        |
+|  Firebase Auth | FCM | Crashlytics | Analytics                    |
++-------------------------------------------------------------------+
+```
+
+**Key principle:** The domain layer depends only on abstractions (repository interfaces). It never imports Isar, Firestore, or any external SDK. The data layer implements those interfaces with concrete local and remote data sources. The sync engine sits between them.
+
+See [specs/00_project_foundation.md](specs/00_project_foundation.md) for the full architectural specification.
+
+---
+
+## Offline-First: How It Works
+
+### Write Path
+
+1. User performs an action (create task, complete chore, redeem reward).
+2. Local Isar DB is updated immediately. UI updates optimistically.
+3. A `SyncOperation` is added to the operation queue (Isar collection).
+4. If online, the sync engine pushes it to Firestore within seconds.
+5. If offline, it stays in the queue until connectivity resumes.
+
+### Read Path
+
+1. All reads come from the local Isar DB. Never from Firestore directly.
+2. When online, Firestore real-time listeners push changes into the local DB.
+3. BLoC/Cubit layers observe local DB changes and emit new UI states.
+
+### Conflict Resolution
+
+**Last-Write-Wins (LWW)** with full audit trail:
+
+- Every entity has a server-set `updatedAt` timestamp.
+- When two devices edit the same entity offline, the later timestamp wins.
+- The losing write is preserved in an `audit_log` subcollection — no data is silently lost.
+- Delete always wins over edit (a parent who deletes a task has made an explicit decision).
+
+### Sync Triggers
+
+| Event | Action |
+|-------|--------|
+| App comes to foreground | Full push + pull |
+| Connectivity restored | Push pending, then pull |
+| Write while online | Immediate push |
+| Firestore listener fires | Pull changed document |
+| Pull-to-refresh | Full sync |
+
+### Connectivity UI
+
+| State | Indicator |
+|-------|-----------|
+| Online, synced | No indicator (default) |
+| Online, syncing | Animated sync icon in app bar |
+| Offline | Yellow banner: "You're offline. Changes will sync when you reconnect." |
+| Reconnecting | Banner: "Reconnected. Syncing..." |
+| Partial failure | "Some changes pending" (tap for details) |
+
+### Feature Degradation
+
+| Feature | Offline |
+|---------|---------|
+| View / create / edit / complete tasks | Fully available |
+| Fairness dashboard | Available (shows "last synced" time) |
+| Switch profiles | Fully available |
+| Redeem rewards | Available (optimistic, confirmed on sync) |
+| Sign in / Sign up | Requires internet |
+| Join family / Invite member | Requires internet |
+| Push notifications | Requires internet |
+
+---
+
+## Multi-User Model
+
+### Accounts vs Profiles
+
+- **Account** = Firebase Auth identity. Only parents have accounts.
+- **Profile** = Family member identity in-app. Everyone has a profile (parents + children).
+- A device authenticates with a parent's account. The active profile determines the UI.
+
+### Device Scenarios
+
+| Device | Auth | Profiles |
+|--------|------|----------|
+| Dad's phone | Marcus's account | Marcus (default) |
+| Mom's phone | Sofia's account | Sofia (default) |
+| Kitchen tablet | Either parent's account | All family members |
+| Alex's tablet | Parent's account | Alex (pinned), parents available |
+
+### PIN Protection
+
+| Action | PIN Required |
+|--------|:----------:|
+| Settings, family management | Yes |
+| Create / edit / delete tasks | Yes |
+| Create / edit / delete rewards | Yes |
+| Fairness dashboard | Configurable (default: Yes) |
+| View own task list | No |
+| Complete a task | No |
+| Redeem a reward | No |
+| Switch to child profile | No |
+| Switch to parent profile (protected sections) | Yes |
+
+PIN is 4-6 digits, hashed with SHA-256 + device salt. Optional biometric bypass via `local_auth`. Lockout after 5 failed attempts (5 minutes, escalating).
+
+---
+
+## Family Members
+
+The app is designed for a specific family shape and adapts to each member:
+
+| Member | Role | App Experience |
+|--------|------|----------------|
+| **Marcus** (Dad, 38) | Contributor | Quick dashboard, actionable notifications, fairness visibility |
+| **Sofia** (Mom, 36) | Administrator | Full control, task management, reduced mental load |
+| **Alex** (10) | Self-tracker | Gamified task list, streaks, points, rewards |
+| **Emma** (3) | Symbolic participant | Picture-based view, large touch targets, instant celebrations |
+
+See [docs/user-personas.md](docs/user-personas.md) for full persona profiles.
+
+---
+
+## Project Structure
+
+```
+lib/
+  app/                          # App config, DI, routing
+  core/                         # Sync engine, connectivity, errors, constants
+  features/                     # Feature modules (clean architecture per feature)
+    auth/                       # Firebase Auth integration
+    family/                     # Family + member management, profile switching
+    tasks/                      # Task CRUD, recurring tasks, completion
+    rewards/                    # Points, rewards, redemption
+    dashboard/                  # Fairness data, contribution charts, streaks
+    pin/                        # PIN setup, verification, biometric bypass
+    notifications/              # FCM, preferences
+  shared/                       # Theme tokens, reusable widgets
+
+test/
+  unit/                         # Mirrors lib/ structure
+  integration/                  # Firebase emulator tests
+  e2e/                          # Full user flow tests
+```
+
+Each feature follows **clean architecture**:
+```
+feature/
+  data/           # Datasources (local + remote), models, repository implementations
+  domain/         # Entities, repository interfaces (abstract), use cases
+  presentation/   # BLoC/Cubit, screens, widgets
+```
+
+---
+
+## Data Model
+
+### Firestore Collections
+
+```
+families/{familyId}
+  members/{memberId}          # name, role, age, avatar, points, streaks, PIN hash
+  tasks/{taskId}              # title, assignees, due date, recurrence, status, points
+    audit_log/{logId}         # immutable action log (conflict resolution, history)
+  rewards/{rewardId}          # title, point cost, active status
+  redemptions/{redemptionId}  # member, reward, points spent, approval status
+  categories/{categoryId}     # name, icon, color, sort order
+```
+
+### Local (Isar)
+
+Mirrors Firestore with additional sync metadata per entity:
+- `remoteId` — Firestore document ID
+- `syncStatus` — `synced`, `pending`, `conflict`
+- `lastSyncedAt` — Timestamp of last successful sync
+
+---
+
+## Development Standards
+
+The project enforces **SOLID principles**, **Clean Code**, and **TDD** as non-negotiable practices.
+
+- **TDD workflow:** Red-green-refactor. Tests before implementation.
+- **Coverage target:** 80% minimum on business logic.
+- **TypeScript-strict equivalent:** Dart strict analysis, no `dynamic`, no force-unwraps in business logic.
+- **Commit format:** Conventional Commits (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`).
+- **PR rules:** 1 approval, all CI green, small and focused.
+
+See [docs/development-rules.md](docs/development-rules.md) for the complete team agreement.
+
+---
+
+## Design System
+
+- **Palette:** Pastel colors (blue, green, pink, yellow, lavender, peach) on warm neutral backgrounds.
+- **Typography:** Nunito — rounded, welcoming, inspired by iOS Reminders.
+- **Components:** Material Design 3, customized with the pastel theme.
+- **Spacing:** 8px base grid.
+- **Elevation:** Minimal shadows, depth via background differences.
+- **Accessibility:** WCAG 2.1 AA, 44px minimum touch targets, screen reader tested.
+
+See [docs/design-system.md](docs/design-system.md) for full tokens, components, and guidelines.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Flutter SDK >= 3.19
+- Dart >= 3.3
+- Firebase CLI (`firebase-tools`)
+- A Firebase project on the Blaze plan (required for Cloud Functions)
+- Xcode (for iOS builds)
+- Android Studio or VS Code with Flutter extension
+
+### Setup
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd choresApp
+
+# Install dependencies
+flutter pub get
+
+# Generate code (DI, freezed, json_serializable, isar)
+dart run build_runner build --delete-conflicting-outputs
+
+# Configure Firebase
+flutterfire configure
+
+# Start Firebase emulators (for local development)
+firebase emulators:start
+
+# Run the app
+flutter run
+
+# Run tests
+flutter test
+
+# Run tests with coverage
+flutter test --coverage
+```
+
+### Environment
+
+Create a `.env` file from the template:
+
+```bash
+cp .env.example .env
+```
+
+The app uses Firebase configuration generated by `flutterfire configure`. No manual API key management needed.
+
+---
+
+## Implementation Phases
+
+| Phase | Scope | Weeks |
+|-------|-------|:-----:|
+| **1. Foundation** | Project scaffold, Isar schemas, sync engine, connectivity monitor | 1-3 |
+| **2. Auth + Family** | Firebase Auth, family creation/joining, profiles, PIN, security rules | 4-5 |
+| **3. Task Management** | Task CRUD, recurring tasks, categories, offline sync integration | 6-8 |
+| **4. Completion + Rewards** | Completion flow, photo verification, points, rewards, celebrations | 9-10 |
+| **5. Dashboard + Fairness** | Contribution charts, time periods, streaks, Emma exclusion | 11-12 |
+| **6. Notifications + Polish** | FCM, reminders, Emma's view, dark mode, biometric PIN | 13-14 |
+| **7. Hardening** | Integration/E2E tests, performance profiling, Crashlytics, accessibility audit | 15-16 |
+
+See [specs/00_project_foundation.md](specs/00_project_foundation.md) for detailed scope per phase.
+
+---
+
+## Open Questions
+
+These require stakeholder decisions before or during implementation:
+
+1. Should reward redemptions require parent approval or auto-approve when points are sufficient? Auto approval.
+2. Can children reassign tasks among themselves, or is reassignment parent-only? parent only
+3. Should automatic chore rotation be supported (e.g., dishes Monday=Alex, Tuesday=Marcus)? Yes
+4. Can a parent belong to more than one family (blended families)? No
+5. How long should completed task history be retained in Firestore? 6 months
+6. Isar maintenance status — verify before Phase 1 or switch to Drift.
+
+---
+
+## Documentation Index
+
+| Document | Path | Contents |
+|----------|------|----------|
+| Jobs to Be Done | [docs/jobs-to-be-done.md](docs/jobs-to-be-done.md) | Three core jobs the app solves |
+| User Personas | [docs/user-personas.md](docs/user-personas.md) | Marcus, Sofia, Alex, Emma profiles |
+| Design System | [docs/design-system.md](docs/design-system.md) | Colors, typography, spacing, components |
+| Development Rules | [docs/development-rules.md](docs/development-rules.md) | SOLID, TDD, clean code, git workflow |
+| Architecture Spec | [specs/00_project_foundation.md](specs/00_project_foundation.md) | Full technical specification |
+
+---
+
+## License
+
+TBD
