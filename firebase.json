@@ -1,0 +1,61 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "colchoresapp",
+          "appId": "1:613454970510:android:9c6f00f63379f987e5d3df",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "colchoresapp",
+          "appId": "1:613454970510:ios:99c37b5c16042ccbe5d3df",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "colchoresapp",
+          "appId": "1:613454970510:ios:99c37b5c16042ccbe5d3df",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "colchoresapp",
+          "configurations": {
+            "android": "1:613454970510:android:9c6f00f63379f987e5d3df",
+            "ios": "1:613454970510:ios:99c37b5c16042ccbe5d3df",
+            "macos": "1:613454970510:ios:99c37b5c16042ccbe5d3df",
+            "web": "1:613454970510:web:79714acca8cc75ade5d3df",
+            "windows": "1:613454970510:web:0de21974499e1980e5d3df"
+          }
+        }
+      }
+    }
+  },
+  "emulators": {
+    "apphosting": {
+      "port": 5002,
+      "rootDirectory": "./"
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "pubsub": {
+      "port": 8085
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  }
+}
