@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "appName": "Family Chores",
+  "@appName": {
+    "description": "The name of the application"
+  }
+}
