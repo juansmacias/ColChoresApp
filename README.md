@@ -315,6 +315,12 @@ See [docs/design-system.md](docs/design-system.md) for full tokens, components, 
 - Xcode (for iOS builds)
 - Android Studio or VS Code with Flutter extension
 
+### Key Flutter Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `flutter_bloc` | ^8.0.0 | State management — BLoC and Cubit patterns for strict UI/logic separation |
+
 ### Setup
 
 ```bash
