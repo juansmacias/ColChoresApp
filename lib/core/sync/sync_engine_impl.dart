@@ -6,6 +6,7 @@ import 'package:injectable/injectable.dart';
 import '../database/app_database.dart';
 import '../enums/operation_type.dart';
 import '../network/connectivity_service.dart';
+import '../network/connectivity_status.dart';
 import 'conflict_resolver.dart';
 import 'entity_sync_adapter.dart';
 import 'exceptions/sync_conflict_exception.dart';
@@ -41,7 +42,7 @@ class SyncEngineImpl implements SyncEngine {
   final Map<String, EntitySyncAdapter> _adapters = {};
 
   _SyncEngineState _engineState = _SyncEngineState.stopped;
-  StreamSubscription<bool>? _connectivitySubscription;
+  StreamSubscription<ConnectivityStatus>? _connectivitySubscription;
   Timer? _periodicSyncTimer;
   bool _isOnline = false;
 
@@ -72,11 +73,12 @@ class SyncEngineImpl implements SyncEngine {
 
     await _operationQueue.recoverInterruptedOperations();
 
-    _isOnline = await _connectivityService.isConnected;
+    _isOnline = (await _connectivityService.checkConnectivity()) ==
+        ConnectivityStatus.online;
     _connectivitySubscription =
-        _connectivityService.onConnectivityChanged.listen((isOnline) async {
-      _isOnline = isOnline;
-      if (isOnline) await syncNow();
+        _connectivityService.statusStream.listen((status) async {
+      _isOnline = status == ConnectivityStatus.online;
+      if (_isOnline) await syncNow();
     });
 
     _periodicSyncTimer = Timer.periodic(

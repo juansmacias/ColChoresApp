@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:family_chores_app/core/database/app_database.dart';
 import 'package:family_chores_app/core/enums/operation_type.dart';
 import 'package:family_chores_app/core/network/connectivity_service.dart';
+import 'package:family_chores_app/core/network/connectivity_status.dart';
 import 'package:family_chores_app/core/sync/conflict_resolver.dart';
 import 'package:family_chores_app/core/sync/entity_sync_adapter.dart';
 import 'package:family_chores_app/core/sync/exceptions/sync_conflict_exception.dart';
@@ -75,10 +76,10 @@ void main() {
     late SyncStatusManager statusManager;
     late AppDatabase testDb;
     late SyncEngineImpl engine;
-    late StreamController<bool> connectivityController;
+    late StreamController<ConnectivityStatus> connectivityController;
 
     setUp(() {
-      connectivityController = StreamController<bool>.broadcast();
+      connectivityController = StreamController<ConnectivityStatus>.broadcast();
       mockQueue = MockOperationQueue();
       mockResolver = MockConflictResolver();
       mockConnectivity = MockConnectivityService();
@@ -86,9 +87,12 @@ void main() {
       statusManager = SyncStatusManager();
       testDb = _openTestDb();
 
-      when(() => mockConnectivity.onConnectivityChanged)
+      when(() => mockConnectivity.statusStream)
           .thenAnswer((_) => connectivityController.stream);
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => false);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.offline);
+      when(() => mockConnectivity.currentStatus)
+          .thenReturn(ConnectivityStatus.offline);
       when(() => mockAdapter.entityType).thenReturn('task');
 
       engine = SyncEngineImpl(
@@ -110,7 +114,8 @@ void main() {
     // ── SE-FT-021: Sync skipped when offline ──────────────────────────────
 
     test('SE-FT-021: syncNow does nothing when offline', () async {
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => false);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.offline);
       when(() => mockQueue.recoverInterruptedOperations())
           .thenAnswer((_) async {});
 
@@ -133,7 +138,8 @@ void main() {
     test('SE-FT-017: syncNow pushes pending ops then emits idle', () async {
       final op = _buildOp();
 
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => true);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.online);
       when(() => mockQueue.recoverInterruptedOperations())
           .thenAnswer((_) async {});
       when(() => mockQueue.markInProgress(any())).thenAnswer((_) async {});
@@ -171,7 +177,8 @@ void main() {
       // retryCount=2: next retry will permanently fail (no backoff delay).
       final op2 = _buildOp(id: 2, entityId: 'task-2', retryCount: 2);
 
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => true);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.online);
       when(() => mockQueue.recoverInterruptedOperations())
           .thenAnswer((_) async {});
       when(() => mockQueue.markInProgress(any())).thenAnswer((_) async {});
@@ -218,7 +225,8 @@ void main() {
     // ── SE-FT-020: Interrupted operations recovered on start ─────────────
 
     test('SE-FT-020: start() calls recoverInterruptedOperations', () async {
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => false);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.offline);
       when(() => mockQueue.recoverInterruptedOperations())
           .thenAnswer((_) async {});
 
@@ -243,7 +251,8 @@ void main() {
       final op = _buildOp(payload: '{"title":"local"}');
       final remoteState = {'title': 'remote'};
 
-      when(() => mockConnectivity.isConnected).thenAnswer((_) async => true);
+      when(() => mockConnectivity.checkConnectivity())
+          .thenAnswer((_) async => ConnectivityStatus.online);
       when(() => mockQueue.recoverInterruptedOperations())
           .thenAnswer((_) async {});
       when(() => mockQueue.markInProgress(any())).thenAnswer((_) async {});
