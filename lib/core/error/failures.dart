@@ -1,40 +1,118 @@
 import 'package:equatable/equatable.dart';
 
-/// Base class for all domain-layer failures.
-/// Use `Result<T>` to return failures from repository methods.
 sealed class Failure extends Equatable {
-  const Failure(this.message);
+  const Failure({
+    required this.message,
+    this.code,
+    this.stackTrace,
+  });
 
   final String message;
+  final String? code;
+  final StackTrace? stackTrace;
 
   @override
-  List<Object?> get props => [message];
-}
-
-final class NetworkFailure extends Failure {
-  const NetworkFailure([super.message = 'Network error occurred']);
+  List<Object?> get props => [message, code];
 }
 
 final class DatabaseFailure extends Failure {
-  const DatabaseFailure([super.message = 'Database error occurred']);
-}
-
-final class AuthFailure extends Failure {
-  const AuthFailure([super.message = 'Authentication failed']);
+  const DatabaseFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+  });
 }
 
 final class SyncFailure extends Failure {
-  const SyncFailure([super.message = 'Sync operation failed']);
+  const SyncFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+    this.failedOperationCount,
+  });
+
+  final int? failedOperationCount;
+
+  @override
+  List<Object?> get props => [...super.props, failedOperationCount];
 }
 
-final class NotFoundFailure extends Failure {
-  const NotFoundFailure([super.message = 'Resource not found']);
+final class NetworkFailure extends Failure {
+  const NetworkFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+  });
 }
 
 final class ValidationFailure extends Failure {
-  const ValidationFailure(super.message);
+  const ValidationFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+    this.fieldErrors,
+  });
+
+  final Map<String, String>? fieldErrors;
+
+  @override
+  List<Object?> get props => [...super.props, fieldErrors];
+}
+
+final class AuthFailure extends Failure {
+  const AuthFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+  });
+}
+
+final class PermissionFailure extends Failure {
+  const PermissionFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+    this.remainingAttempts,
+    this.lockoutDuration,
+  });
+
+  final int? remainingAttempts;
+  final Duration? lockoutDuration;
+
+  @override
+  List<Object?> get props => [
+        ...super.props,
+        remainingAttempts,
+        lockoutDuration,
+      ];
+}
+
+final class ConflictFailure extends Failure {
+  const ConflictFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+    required this.entityType,
+    required this.entityId,
+  });
+
+  final String entityType;
+  final String entityId;
+
+  @override
+  List<Object?> get props => [...super.props, entityType, entityId];
 }
 
 final class UnexpectedFailure extends Failure {
-  const UnexpectedFailure([super.message = 'An unexpected error occurred']);
+  const UnexpectedFailure({
+    required super.message,
+    super.code,
+    super.stackTrace,
+    this.originalException,
+  });
+
+  final Object? originalException;
+
+  @override
+  List<Object?> get props => [...super.props, originalException];
 }

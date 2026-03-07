@@ -1,27 +1,44 @@
-// Data-layer exceptions. These are caught by repositories and
-// converted into Failure instances for the domain layer.
+sealed class AppException implements Exception {
+  const AppException({
+    required this.message,
+    this.code,
+  });
 
-class NetworkException implements Exception {
-  const NetworkException([this.message = 'Network error occurred']);
   final String message;
+  final String? code;
 }
 
-class DatabaseException implements Exception {
-  const DatabaseException([this.message = 'Database error occurred']);
-  final String message;
+final class DatabaseException extends AppException {
+  const DatabaseException({
+    required super.message,
+    super.code,
+  });
 }
 
-class AuthException implements Exception {
-  const AuthException([this.message = 'Authentication failed']);
-  final String message;
+final class SyncException extends AppException {
+  const SyncException({
+    required super.message,
+    super.code,
+  });
 }
 
-class SyncException implements Exception {
-  const SyncException([this.message = 'Sync operation failed']);
-  final String message;
+final class NetworkException extends AppException {
+  const NetworkException({
+    required super.message,
+    super.code,
+  });
 }
 
-class NotFoundException implements Exception {
-  const NotFoundException([this.message = 'Resource not found']);
-  final String message;
+final class AuthException extends AppException {
+  const AuthException({
+    required super.message,
+    super.code,
+  });
+}
+
+final class CacheException extends AppException {
+  const CacheException({
+    required super.message,
+    super.code,
+  });
 }

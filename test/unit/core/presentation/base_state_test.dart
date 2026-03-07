@@ -34,11 +34,14 @@ void main() {
 
     test('ErrorState keeps failure and previous data', () {
       const state = ErrorState(
-        failure: NetworkFailure(),
+        failure: NetworkFailure(message: 'Network error occurred'),
         previousData: 'cached-data',
       );
 
-      expect(state.failure, const NetworkFailure());
+      expect(
+        state.failure,
+        const NetworkFailure(message: 'Network error occurred'),
+      );
       expect(state.previousData, 'cached-data');
     });
   });

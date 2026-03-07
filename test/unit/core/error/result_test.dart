@@ -4,40 +4,86 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Result', () {
-    group('Ok', () {
-      test('should return value on isOk', () {
-        final result = ok(42);
-        expect(result.isOk, isTrue);
-        expect(result.isErr, isFalse);
+    group('success', () {
+      test('should carry the value', () {
+        const result = Result.success(42);
+
+        expect(result.isSuccess, isTrue);
+        expect(result.isFailure, isFalse);
+        expect(result.valueOrNull, 42);
+        expect(result.failureOrNull, isNull);
       });
 
-      test('should return value from getOrElse', () {
-        final result = ok(42);
-        expect(result.getOrElse(() => 0), 42);
+      test('should execute success branch in when()', () {
+        const result = Result.success(42);
+
+        final output = result.when(
+          success: (value) => 'Got $value',
+          failure: (failure) => 'Failed: ${failure.message}',
+        );
+
+        expect(output, 'Got 42');
       });
 
-      test('should call onOk in fold', () {
-        final result = ok(42);
-        final output = result.fold((v) => v * 2, (_) => 0);
-        expect(output, 84);
+      test('map should transform success value', () {
+        const result = Result.success(2);
+        final mapped = result.map((value) => value * 2);
+
+        expect(mapped.valueOrNull, 4);
+      });
+
+      test('flatMap should transform success value', () {
+        const result = Result.success(2);
+        final mapped = result.flatMap((value) => Result.success(value * 3));
+
+        expect(mapped.valueOrNull, 6);
       });
     });
 
-    group('Err', () {
-      test('should return failure on isErr', () {
-        final result = err<int>(const NetworkFailure());
-        expect(result.isErr, isTrue);
-        expect(result.isOk, isFalse);
+    group('failure', () {
+      test('should carry the failure', () {
+        const failure = DatabaseFailure(message: 'Write failed');
+        const result = Result<int>.failure(failure);
+
+        expect(result.isSuccess, isFalse);
+        expect(result.isFailure, isTrue);
+        expect(result.valueOrNull, isNull);
+        expect(result.failureOrNull, failure);
       });
 
-      test('should return default from getOrElse', () {
-        final result = err<int>(const NetworkFailure());
+      test('map should pass through failure', () {
+        const failure = NetworkFailure(message: 'offline');
+        final result = Result<int>.failure(failure);
+        final mapped = result.map((value) => value * 2);
+
+        expect(mapped.failureOrNull, failure);
+      });
+
+      test('getOrElse should return default on failure', () {
+        const result = Result<int>.failure(
+          NetworkFailure(message: 'offline'),
+        );
+
         expect(result.getOrElse(() => 99), 99);
       });
 
-      test('should call onErr in fold', () {
-        final result = err<int>(const NetworkFailure('test error'));
-        final output = result.fold((_) => '', (f) => f.message);
+      test('getOrThrow should throw on failure', () {
+        const result = Result<int>.failure(
+          NetworkFailure(message: 'test error'),
+        );
+
+        expect(result.getOrThrow, throwsStateError);
+      });
+
+      test('when should execute failure branch', () {
+        const result = Result<int>.failure(
+          NetworkFailure(message: 'test error'),
+        );
+        final output = result.when(
+          success: (_) => '',
+          failure: (failure) => failure.message,
+        );
+
         expect(output, 'test error');
       });
     });
