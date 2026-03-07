@@ -6,23 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Family Chores App — a Flutter mobile app helping families coordinate household chores, build responsibility in children, and make invisible household labor visible. Designed for a family of four: Marcus (dad, 38), Sofia (mom, 36), Alex (child, 10), Emma (toddler, 3).
 
-**Status:** Pre-implementation (documentation and specs complete, no Flutter project scaffolded yet).
+**Status:** Phase 1 in progress (project scaffold complete, Drift schemas implemented).
 
 ## Tech Stack
 
 - **Frontend:** Flutter/Dart with BLoC/Cubit state management
-- **Local DB:** Isar (decision gate: verify maintenance status before Phase 1; Drift is fallback)
+- **Local DB:** Drift (SQLite via Drift ORM — Isar was rejected due to Dart 3.x incompatibility)
 - **Backend:** Firebase (Auth, Firestore, Cloud Functions, FCM, Crashlytics, Analytics)
 - **DI:** get_it + injectable
 - **Routing:** go_router with auth and PIN route guards
 - **Design:** Material Design 3, pastel palette, Nunito font (google_fonts)
 - **Animations:** Lottie (celebrations), fl_chart (fairness dashboard)
 
-## Commands (once Flutter project is scaffolded)
+## Commands
 
 ```bash
 flutter pub get                                          # Install dependencies
-dart run build_runner build --delete-conflicting-outputs  # Generate DI, freezed, json_serializable, isar
+dart run build_runner build --delete-conflicting-outputs  # Generate DI, Drift, freezed, json_serializable
 flutterfire configure                                    # Configure Firebase
 firebase emulators:start                                 # Local Firebase emulators
 flutter run                                              # Run the app
@@ -40,12 +40,12 @@ Presentation (Screens → BLoC/Cubit)
     ↓ depends on abstractions only
 Domain (Services → Repository Interfaces, Use Cases, Entities)
     ↓ implemented by
-Data (Local Datasource [Isar] + Remote Datasource [Firestore] → Repository Implementations)
+Data (Local Datasource [Drift/SQLite] + Remote Datasource [Firestore] → Repository Implementations)
     ↓ mediated by
 Sync Engine (Operation Queue, Conflict Resolver, Connectivity Monitor)
 ```
 
-**Key rule:** Domain layer never imports Isar, Firestore, or any external SDK. It depends only on abstract repository interfaces (DIP).
+**Key rule:** Domain layer never imports Drift, Firestore, or any external SDK. It depends only on abstract repository interfaces (DIP).
 
 ### Feature Structure (each feature under `lib/features/`)
 
@@ -60,7 +60,7 @@ Features: `auth`, `family`, `tasks`, `rewards`, `dashboard`, `pin`, `notificatio
 
 ### Sync Engine (`lib/core/sync/`)
 
-The most architecturally significant component. All writes go to local Isar first, then queue for Firestore sync. All reads come from local Isar only.
+The most architecturally significant component. All writes go to local Drift DB first, then queue for Firestore sync. All reads come from local Drift DB only.
 
 - **Conflict resolution:** Last-Write-Wins (LWW) using Firestore server timestamps. Losing writes preserved in `audit_log` subcollection. Delete always wins over edit.
 - **Operation queue:** FIFO processing, retry up to 3x with exponential backoff (1s, 4s, 16s).
@@ -86,7 +86,7 @@ families/{familyId}
   categories/{categoryId}     # name, icon, color
 ```
 
-Local Isar mirrors Firestore with added sync metadata: `remoteId`, `syncStatus` (synced/pending/conflict), `lastSyncedAt`.
+Local Drift DB mirrors Firestore with added sync metadata: `remoteId`, `syncStatus` (synced/pending/conflict), `lastSyncedAt`.
 
 ## Development Standards
 
@@ -118,3 +118,4 @@ Local Isar mirrors Firestore with added sync metadata: `remoteId`, `syncStatus` 
 - Multi-family: not supported (one family per account)
 - Completed task history retention: 6 months in Firestore
 - Emma (age 3): excluded from fairness comparisons; gets simplified picture-based UI with 56px touch targets and 2.5s celebrations
+- **Local DB: Drift** — Isar 3.x requires Dart <3.0.0, incompatible with the project's Dart 3.11.1. Drift is the final decision.

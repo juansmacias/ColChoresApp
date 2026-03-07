@@ -4,6 +4,21 @@ Developer-focused guide for setup, running, testing, and contributing to the pro
 
 ---
 
+## Platform Support
+
+| Platform | Support | Notes |
+|----------|---------|-------|
+| **Android** | Required | Primary target. Min SDK 26 (Android 8.0) |
+| **iOS** | Required | Primary target. Min deployment target iOS 15.0 |
+| **Web** | Required | Core target. Firebase works natively on web |
+| **macOS** | Optional | Best-effort. Requires Xcode and macOS entitlements |
+| **Linux** | Optional | Best-effort. No biometric support (`local_auth`) |
+| **Windows** | Optional | Best-effort. No biometric support (`local_auth`) |
+
+> **Note:** All features must work on Android, iOS, and Web. Desktop platforms (macOS, Linux, Windows) may have degraded functionality for features that rely on mobile-only plugins (e.g. biometric PIN, image picker, FCM push notifications).
+
+---
+
 ## Requirements
 
 | Tool | Version | Notes |
@@ -24,16 +39,16 @@ Developer-focused guide for setup, running, testing, and contributing to the pro
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `flutter_bloc` | ^8.1.6 | BLoC and Cubit patterns — strict UI/logic separation, stream-based reactivity |
+| `flutter_bloc` | ^9.1.1 | BLoC and Cubit patterns — strict UI/logic separation, stream-based reactivity |
 | `equatable` | ^2.0.5 | Value equality for BLoC states and events |
 
 ### Local Database
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `isar` | ^3.1.0 | Embedded NoSQL database — offline-first local storage |
-| `isar_flutter_libs` | ^3.1.0 | Isar native binaries for Flutter |
-| `path_provider` | ^2.1.0 | Locate Isar DB file on device |
+| `drift` | ^2.18.0 | Type-safe SQLite ORM — offline-first local storage |
+| `sqlite3_flutter_libs` | ^0.6.0 | SQLite native binaries for Flutter |
+| `path_provider` | ^2.1.0 | Locate Drift DB file on device |
 
 ### Firebase
 
@@ -78,7 +93,7 @@ Developer-focused guide for setup, running, testing, and contributing to the pro
 | `build_runner` | ^2.4.0 | Code generation runner |
 | `freezed_annotation` | ^2.4.0 | Annotations for freezed |
 | `json_annotation` | ^4.9.0 | Annotations for json_serializable |
-| `isar_generator` | ^3.1.0 | Isar schema code generation |
+| `drift_dev` | ^2.18.0 | Drift schema code generation |
 | `injectable_generator` | ^2.4.0 | DI code generation |
 | `mocktail` | ^1.0.4 | Mocking library for unit tests |
 | `bloc_test` | ^9.1.7 | BLoC-specific test utilities |
@@ -100,7 +115,7 @@ flutter pub get
 
 ### 2. Generate code
 
-Run after any change to Isar schemas, Freezed models, or DI registrations:
+Run after any change to Drift table definitions, Freezed models, or DI registrations:
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs
@@ -219,9 +234,9 @@ test/
 
 The project uses `build_runner` for four generators. Re-run after modifying any annotated file:
 
-| Generator | Annotation | Output file |
-|-----------|-----------|------------|
-| Isar | `@collection` | `*.isar.dart` |
+| Generator | Annotation / Trigger | Output file |
+|-----------|---------------------|------------|
+| Drift | `@DriftDatabase`, `Table` subclasses | `*.g.dart` |
 | Freezed | `@freezed` | `*.freezed.dart` |
 | json_serializable | `@JsonSerializable` | `*.g.dart` |
 | injectable | `@injectable`, `@singleton` | `injection.config.dart` |
@@ -238,12 +253,12 @@ dart run build_runner build --delete-conflicting-outputs
 
 ```
 Presentation  →  Domain  ←  Data
-(BLoC/Cubit)     (pure Dart)   (Isar + Firestore)
+(BLoC/Cubit)     (pure Dart)   (Drift + Firestore)
                      ↑
                Sync Engine
 ```
 
-**Rule:** Domain layer never imports Isar, Firestore, or any external SDK. It depends only on abstract repository interfaces.
+**Rule:** Domain layer never imports Drift, Firestore, or any external SDK. It depends only on abstract repository interfaces.
 
 ### Feature structure
 
@@ -253,7 +268,7 @@ Each feature under `lib/features/` follows the same layout:
 feature_name/
   data/
     datasources/        # local_datasource.dart, remote_datasource.dart
-    models/             # Isar schemas, Firestore DTOs
+    models/             # Drift table definitions, Firestore DTOs
     repositories/       # Repository implementations
   domain/
     entities/           # Pure Dart classes (Freezed)
@@ -387,9 +402,9 @@ flutter pub upgrade
 
 Ensure the app is configured to point to emulators at startup. Check `lib/app/firebase_emulator_config.dart` (to be created in Phase 1). The Firestore emulator host must be `10.0.2.2` on Android emulator and `localhost` on iOS simulator.
 
-### Isar schema not updating
+### Drift schema not updating
 
-Delete the Isar DB file on the device/simulator and relaunch. Schema migrations are not automatic in development.
+Delete the Drift DB file (`family_chores.db`) on the device/simulator and relaunch, or increment `schemaVersion` in `AppDatabase` and add a migration in `MigrationStrategy`. Re-run `build_runner` after any table definition change.
 
 ---
 

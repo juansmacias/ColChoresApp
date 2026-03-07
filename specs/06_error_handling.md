@@ -257,7 +257,7 @@ sealed class Failure extends Equatable {
 ```dart
 // lib/core/error/failures.dart (continued)
 
-/// Failure from the local Isar database.
+/// Failure from the local Drift database.
 /// Covers: write errors, read errors, schema issues, migration failures.
 class DatabaseFailure extends Failure {
   const DatabaseFailure({
@@ -404,7 +404,7 @@ sealed class AppException implements Exception {
   const AppException({required this.message, this.code});
 }
 
-/// Thrown by Isar datasource operations.
+/// Thrown by Drift datasource operations.
 class DatabaseException extends AppException {
   const DatabaseException({required super.message, super.code});
 }
@@ -527,7 +527,7 @@ class TaskRepositoryImpl implements TaskRepository {
 
 | Exception Type | Maps To | When |
 |---------------|---------|------|
-| `DatabaseException` | `DatabaseFailure` | Isar read/write errors |
+| `DatabaseException` | `DatabaseFailure` | Drift read/write errors |
 | `SyncConflictException` | `ConflictFailure` | Sync conflict detected |
 | `SyncException` | `SyncFailure` | Sync queue or push/pull errors |
 | `NetworkException` | `NetworkFailure` | Connectivity or timeout errors |

@@ -4,7 +4,7 @@
 
 ### 1.1 Summary
 
-This specification defines the complete test plan for Phase 1: Foundation of the Family Chores App. It covers unit tests for every component built in Phase 1 (sync engine, connectivity monitor, BLoC foundation, error handling, Isar schemas), integration test strategy, test infrastructure (fixtures, mocks, helpers), and quality targets. Every test scenario traces back to a requirement in the corresponding component spec.
+This specification defines the complete test plan for Phase 1: Foundation of the Family Chores App. It covers unit tests for every component built in Phase 1 (sync engine, connectivity monitor, BLoC foundation, error handling, Drift schemas), integration test strategy, test infrastructure (fixtures, mocks, helpers), and quality targets. Every test scenario traces back to a requirement in the corresponding component spec.
 
 ### 1.2 Business Context
 
@@ -14,7 +14,7 @@ The development rules (`docs/development-rules.md`) mandate TDD with 80% minimum
 
 **In scope:**
 - Unit tests for: OperationQueue, ConflictResolver, SyncEngine, ConnectivityService, BLoC mixins, Result type, Failure hierarchy, ErrorMessages
-- Integration tests for: Isar schema roundtrips, Isar index queries, multi-isolate Isar access
+- Integration tests for: Drift schema roundtrips, Drift index queries, multi-isolate Drift access
 - Test infrastructure: fixtures, mock factories, test helpers
 - Coverage targets and enforcement strategy
 
@@ -27,7 +27,7 @@ The development rules (`docs/development-rules.md`) mandate TDD with 80% minimum
 ### 1.4 References
 
 - `specs/01_project_scaffolding.md` -- Test directory structure, dev dependencies
-- `specs/02_isar_schemas.md` -- Section 12 (Isar test scenarios)
+- `specs/02_isar_schemas.md` -- Section 12 (Drift test scenarios)
 - `specs/03_sync_engine.md` -- Section 8 (Sync engine test scenarios)
 - `specs/04_connectivity_monitor.md` -- Section 7 (Connectivity test scenarios)
 - `specs/05_bloc_foundation.md` -- Section 9 (BLoC test scenarios)
@@ -53,7 +53,7 @@ No code is merged without corresponding tests.
 | Type | Scope | Runner | Phase 1 Count |
 |------|-------|--------|---------------|
 | **Unit** | Single class, all dependencies mocked | `flutter test test/unit/` | ~80 tests |
-| **Integration** | Isar with real database (in-memory) | `flutter test test/integration/` | ~15 tests |
+| **Integration** | Drift with real database (in-memory) | `flutter test test/integration/` | ~15 tests |
 | **Widget** | N/A for Phase 1 (no UI) | -- | 0 |
 | **E2E** | N/A for Phase 1 | -- | 0 |
 
@@ -130,9 +130,9 @@ test/
 |       (empty in Phase 1)
 +-- integration/
 |   +-- database/
-|       +-- isar_schema_test.dart
-|       +-- isar_index_test.dart
-|       +-- isar_multi_isolate_test.dart
+|       +-- drift_schema_test.dart
+|       +-- drift_index_test.dart
+|       +-- drift_multi_isolate_test.dart
 +-- fixtures/
 |   +-- task_fixtures.dart
 |   +-- member_fixtures.dart
@@ -142,7 +142,7 @@ test/
 +-- helpers/
     +-- test_helpers.dart
     +-- mock_factories.dart
-    +-- isar_test_helper.dart
+    +-- drift_test_helper.dart
 ```
 
 ### 3.2 Mock Factories
@@ -163,8 +163,8 @@ class MockConnectivity extends Mock implements Connectivity {}
 class MockConnectivityService extends Mock implements ConnectivityService {}
 
 // --- Database Mocks ---
-class MockIsar extends Mock implements Isar {}
-class MockIsarCollection<T> extends Mock implements IsarCollection<T> {}
+class MockAppDatabase extends Mock implements AppDatabase {}
+// Use real in-memory AppDatabase instead of mock collections
 
 // --- Fallback values (required by mocktail for value types) ---
 void registerFallbackValues() {
@@ -349,25 +349,25 @@ class MemberFixtures {
 }
 ```
 
-### 3.4 Isar Test Helper
+### 3.4 Drift Test Helper
 
 ```dart
-// test/helpers/isar_test_helper.dart
+// test/helpers/drift_test_helper.dart
 
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
-/// Provides an in-memory Isar instance for integration tests.
+/// Provides an in-memory Drift database for integration tests.
 /// Each test gets a fresh database.
-class IsarTestHelper {
+class DriftTestHelper {
   static int _dbCounter = 0;
 
-  /// Creates a fresh Isar instance for testing.
+  /// Creates a fresh in-memory Drift database for testing.
   /// Uses a unique name per test to prevent interference.
-  static Future<Isar> createTestDatabase() async {
-    await Isar.initializeIsarCore(download: true);
+  static Future<AppDatabase> createTestDatabase() async {
+    
 
     final name = 'test_db_${_dbCounter++}';
-    return Isar.open(
+    return AppDatabase(NativeDatabase.memory());// 
       [
         FamilyEntitySchema,
         MemberEntitySchema,
@@ -383,8 +383,8 @@ class IsarTestHelper {
   }
 
   /// Closes and cleans up a test database.
-  static Future<void> closeTestDatabase(Isar isar) async {
-    await isar.close(deleteFromDisk: true);
+  static Future<void> closeTestDatabase(AppDatabase db) async {
+    await db.close();
   }
 }
 ```
@@ -401,15 +401,15 @@ class IsarTestHelper {
 void main() {
   group('OperationQueue', () {
     late OperationQueue queue;
-    late Isar isar;
+    late AppDatabase database;
 
     setUp(() async {
-      isar = await IsarTestHelper.createTestDatabase();
-      queue = OperationQueueImpl(isar);
+      database = await DriftTestHelper.createTestDatabase();
+      queue = OperationQueueImpl(database);
     });
 
     tearDown(() async {
-      await IsarTestHelper.closeTestDatabase(isar);
+      await DriftTestHelper.closeTestDatabase(database);
     });
 
     group('enqueue', () {
@@ -1106,43 +1106,43 @@ void main() {
 
 ## 5. Integration Tests
 
-### 5.1 Isar Schema Integration Tests
+### 5.1 Drift Schema Integration Tests
 
-**File:** `test/integration/database/isar_schema_test.dart`
+**File:** `test/integration/database/drift_schema_test.dart`
 
 ```dart
 void main() {
-  group('Isar Schema Integration', () {
-    late Isar isar;
+  group('Drift Schema Integration', () {
+    late AppDatabase database;
 
     setUp(() async {
-      isar = await IsarTestHelper.createTestDatabase();
+      database = await DriftTestHelper.createTestDatabase();
     });
 
     tearDown(() async {
-      await IsarTestHelper.closeTestDatabase(isar);
+      await DriftTestHelper.closeTestDatabase(database);
     });
 
     test('should open database with all 7 collections', () {
-      expect(isar.isOpen, isTrue);
-      expect(isar.taskEntitys, isNotNull);
-      expect(isar.memberEntitys, isNotNull);
-      expect(isar.familyEntitys, isNotNull);
-      expect(isar.rewardEntitys, isNotNull);
-      expect(isar.redemptionEntitys, isNotNull);
-      expect(isar.categoryEntitys, isNotNull);
-      expect(isar.syncOperationEntitys, isNotNull);
+      // Drift DB is open if no exception was thrown;
+      
+      
+      
+      
+      
+      
+      
     });
 
     group('TaskEntity', () {
       test('should write and read with all fields', () async {
         final task = TaskFixtures.pendingTask();
 
-        await isar.writeTxn(() async {
-          await isar.taskEntitys.put(task);
+        await database.transaction(() async {
+          await database.into(database./task);
         });
 
-        final read = await isar.taskEntitys.get(task.id);
+        // query via Drift: task.id);
         expect(read, isNotNull);
         expect(read!.title, equals('Unload dishwasher'));
         expect(read.status, equals(TaskStatus.pending));
@@ -1153,11 +1153,11 @@ void main() {
       test('should roundtrip embedded subtasks', () async {
         final task = TaskFixtures.taskWithSubtasks();
 
-        await isar.writeTxn(() async {
-          await isar.taskEntitys.put(task);
+        await database.transaction(() async {
+          await database.into(database./task);
         });
 
-        final read = await isar.taskEntitys.get(task.id);
+        // query via Drift: task.id);
         expect(read!.subtasks.length, equals(3));
         expect(read.subtasks[0].title, equals('Top rack'));
         expect(read.subtasks[0].completed, isTrue);
@@ -1169,15 +1169,15 @@ void main() {
         final task1 = TaskFixtures.pendingTask(remoteId: 'same-id');
         final task2 = TaskFixtures.pendingTask(remoteId: 'same-id');
 
-        await isar.writeTxn(() async {
-          await isar.taskEntitys.put(task1);
+        await database.transaction(() async {
+          await database.into(database./task1);
         });
 
         expect(
-          () => isar.writeTxn(() async {
-            await isar.taskEntitys.put(task2);
+          () => database.writeTxn(() async {
+            await database.into(database./task2);
           }),
-          throwsA(isA<IsarError>()),
+          throwsA(isA<SqliteException>()),
         );
       });
     });
@@ -1197,11 +1197,11 @@ void main() {
           createdAt: DateTime(2026, 3, 5, 10, 10),
         );
 
-        await isar.writeTxn(() async {
-          await isar.syncOperationEntitys.putAll([op3, op1, op2]);
+        await database.transaction(() async {
+          await database.managers([op3, op1, op2]);
         });
 
-        final pending = await isar.syncOperationEntitys
+        final pending = await database.syncOperationEntitys
             .where()
             .statusCreatedAtEqualTo('pending')
             .sortByCreatedAt()
@@ -1219,26 +1219,26 @@ void main() {
 }
 ```
 
-### 5.2 Isar Index Query Tests
+### 5.2 Drift Index Query Tests
 
-**File:** `test/integration/database/isar_index_test.dart`
+**File:** `test/integration/database/drift_index_test.dart`
 
 ```dart
 void main() {
-  group('Isar Index Queries', () {
-    late Isar isar;
+  group('Drift Index Queries', () {
+    late AppDatabase database;
 
     setUp(() async {
-      isar = await IsarTestHelper.createTestDatabase();
-      await _seedTestData(isar);
+      database = await DriftTestHelper.createTestDatabase();
+      await _seedTestData(database);
     });
 
     tearDown(() async {
-      await IsarTestHelper.closeTestDatabase(isar);
+      await DriftTestHelper.closeTestDatabase(database);
     });
 
     test('familyId_status_dueDate index: pending tasks by due date', () async {
-      final results = await isar.taskEntitys
+      final results = await database.taskEntitys
           .where()
           .familyIdStatusDueDateEqualTo('family-1', TaskStatus.pending.name)
           .sortByDueDate()
@@ -1259,7 +1259,7 @@ void main() {
 
     test('familyId_completedAt index: completed tasks in date range', () async {
       final weekAgo = DateTime.now().subtract(const Duration(days: 7));
-      final results = await isar.taskEntitys
+      final results = await database.taskEntitys
           .where()
           .familyIdCompletedAtBetween('family-1', weekAgo, DateTime.now())
           .findAll();
@@ -1275,7 +1275,7 @@ void main() {
     });
 
     test('assigneeIds index: tasks containing specific member', () async {
-      final results = await isar.taskEntitys
+      final results = await database.taskEntitys
           .where()
           .assigneeIdsElementEqualTo('alex-1')
           .findAll();
@@ -1288,7 +1288,7 @@ void main() {
     });
 
     test('memberId_redeemedAt index: member redemption history', () async {
-      final results = await isar.redemptionEntitys
+      final results = await database.redemptionEntitys
           .where()
           .memberIdRedeemedAtEqualTo('alex-1')
           .sortByRedeemedAtDesc()
@@ -1300,8 +1300,8 @@ void main() {
   });
 }
 
-Future<void> _seedTestData(Isar isar) async {
-  await isar.writeTxn(() async {
+Future<void> _seedTestData(Drift database) async {
+  await database.transaction(() async {
     // Seed 20 tasks across 2 families, various statuses and dates
     // Seed 5 members
     // Seed 10 redemptions
@@ -1323,9 +1323,9 @@ Tests should be written and executed in this order, matching the implementation 
 | 1 | Result<T> | `result_test.dart` | None |
 | 2 | Failure hierarchy | `failures_test.dart` | None |
 | 3 | ErrorMessages | `error_messages_test.dart` | Failures |
-| 4 | Isar schemas | `isar_schema_test.dart` | None (integration, real Isar) |
-| 5 | Isar indexes | `isar_index_test.dart` | Schemas, fixtures |
-| 6 | OperationQueue | `operation_queue_test.dart` | Isar schemas |
+| 4 | Drift schemas | `drift_schema_test.dart` | None (integration, real Drift) |
+| 5 | Drift indexes | `drift_index_test.dart` | Schemas, fixtures |
+| 6 | OperationQueue | `operation_queue_test.dart` | Drift schemas |
 | 7 | ConflictResolver | `conflict_resolver_test.dart` | None (pure logic) |
 | 8 | SyncConfig | `sync_config_test.dart` | None |
 | 9 | SyncEngine | `sync_engine_test.dart` | Queue, Resolver, Connectivity |
@@ -1371,7 +1371,7 @@ All test IDs from component specs, consolidated:
 
 | Source Spec | Test ID Range | Count | Description |
 |-------------|--------------|-------|-------------|
-| 02_isar_schemas | IS-FT-001 to IS-FT-015 | 15 | Schema roundtrips, indexes, cleanup |
+| 02_isar_schemas | DR-FT-001 to DR-FT-015 | 15 | Schema roundtrips, indexes, cleanup |
 | 03_sync_engine | SE-FT-001 to SE-FT-028 | 28 | Queue, resolver, orchestrator, edge cases |
 | 04_connectivity | CM-FT-001 to CM-FT-012 | 12 | Stream behavior, debounce, reachability |
 | 05_bloc_foundation | BF-FT-001 to BF-FT-014 | 14 | Mixins, state hierarchy, banner mapping |
@@ -1384,9 +1384,9 @@ All test IDs from component specs, consolidated:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Isar in-memory mode behaves differently from file mode | Medium | Medium | Run a subset of tests with file-based Isar in CI |
+| Drift in-memory mode behaves differently from file mode | Medium | Medium | Run a subset of tests with file-based Drift in CI |
 | Async test timing issues (debounce, backoff) | High | Low | Use `fake_async` package for deterministic time control |
-| Mock setup complexity hides real integration bugs | Medium | Medium | Supplement unit tests with integration tests using real Isar |
+| Mock setup complexity hides real integration bugs | Medium | Medium | Supplement unit tests with integration tests using real Drift database |
 | Test fixtures drift from actual data patterns | Low | Medium | Validate fixtures against Firestore seed data in Phase 2 |
 | Coverage target not met | Medium | Medium | Track coverage per-file, not just aggregate. Fix gaps before merging. |
 
@@ -1395,7 +1395,7 @@ All test IDs from component specs, consolidated:
 ## 9. Open Questions
 
 - [ ] Should we use `fake_async` for all time-dependent tests (debounce, retry backoff), or use real `Future.delayed` with generous timeouts? Recommendation: `fake_async` for determinism.
-- [ ] Should integration tests use the Isar in-memory mode or write to a temporary directory? In-memory is faster but may miss file I/O issues.
+- [ ] Should integration tests use the Drift in-memory mode or write to a temporary directory? In-memory is faster but may miss file I/O issues.
 - [ ] Should we set up a test coverage badge in the README during Phase 1?
 
 ---

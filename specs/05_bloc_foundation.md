@@ -548,7 +548,7 @@ From `specs/00_project_foundation.md` Section 4.8.3, codified as a standard appr
 1. User Action
        |
        v
-2. Update Local DB (Isar)
+2. Update Local DB (Drift)
        |
        v
 3. Emit New State (immediate UI update)
@@ -616,11 +616,11 @@ Future<void> completeTask(String taskId) async {
 When a sync conflict is resolved and the remote version wins:
 
 1. `SyncEngine` resolves the conflict (remote wins).
-2. `SyncEngine` updates the local Isar entity with the remote state.
+2. `SyncEngine` updates the local Drift entity with the remote state.
 3. `SyncEngine` emits `SyncEvent.conflictResolved(entityType: 'task', ...)`.
 4. `SyncAwareMixin` in `TaskListCubit` receives the event.
 5. `onSyncCompleted()` triggers `_refreshTasks()`.
-6. Cubit re-reads from Isar (which now has the remote-winning state).
+6. Cubit re-reads from Drift DB (which now has the remote-winning state).
 7. New state is emitted with the corrected data.
 8. UI updates to show the corrected version.
 9. Optionally, a brief SnackBar: "A task was updated by another device."
