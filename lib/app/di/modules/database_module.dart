@@ -1,8 +1,19 @@
-import 'package:injectable/injectable.dart';
+import 'dart:io';
 
-// TODO(phase-1): Register AppDatabase once Drift schema is defined
-// per specs/02_isar_schemas.md (adapted for Drift).
-// Imports for drift, path_provider, path, and dart:io will be added then.
+import 'package:drift/native.dart';
+import 'package:injectable/injectable.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import '../../../core/database/app_database.dart';
 
 @module
-abstract class DatabaseModule {}
+abstract class DatabaseModule {
+  @preResolve
+  @singleton
+  Future<AppDatabase> get database async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dir.path, 'family_chores.db'));
+    return AppDatabase(NativeDatabase(file));
+  }
+}

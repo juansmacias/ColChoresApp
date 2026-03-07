@@ -6,6 +6,7 @@ targets:
           - lib/**
       drift_dev:
         generate_for:
+          - lib/core/database/**
           - lib/features/**/models/**
           - lib/core/sync/**
       freezed|freezed:

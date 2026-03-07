@@ -8,6 +8,10 @@ abstract class StorageConstants {
   static const String categoriesCollection = 'categories';
   static const String auditLogCollection = 'audit_log';
 
-  // Local DB table names
-  static const String dbName = 'family_chores.db';
+  // Local DB
+  static const String dbFileName = 'family_chores.db';
+
+  // Schema versioning
+  static const int currentSchemaVersion = 1;
+  static const String schemaVersionKey = 'db_schema_version';
 }
