@@ -1,23 +1,30 @@
-import 'package:injectable/injectable.dart';
-
 import '../constants/sync_constants.dart';
 
-@singleton
-class SyncConfig {
-  const SyncConfig({
-    this.maxRetryAttempts = SyncConstants.maxRetryAttempts,
-    this.retryBaseDelaySeconds = SyncConstants.retryBaseDelaySeconds,
-    this.maxQueueSize = SyncConstants.maxQueueSize,
-    this.batchSize = SyncConstants.syncBatchSize,
-  });
+/// Sync engine configuration. All values sourced from [SyncConstants].
+/// Static-only class — no instantiation needed.
+abstract class SyncConfig {
+  static const int maxRetryCount = SyncConstants.maxRetryAttempts;
+  static const int retryBaseDelaySeconds = SyncConstants.retryBaseDelaySeconds;
+  static const int retryBackoffFactor = SyncConstants.retryExponent;
+  static const int maxQueueSize = SyncConstants.maxQueueSize;
+  static const int queueWarningThreshold = SyncConstants.queueWarningThreshold;
+  static const int periodicSyncIntervalSeconds =
+      SyncConstants.periodicSyncIntervalSeconds;
+  static const int batchSize = SyncConstants.syncBatchSize;
 
-  final int maxRetryAttempts;
-  final int retryBaseDelaySeconds;
-  final int maxQueueSize;
-  final int batchSize;
+  /// Calculates retry delay for a given attempt number (0-indexed).
+  /// attempt 0 → 1s, attempt 1 → 4s, attempt 2 → 16s
+  static Duration retryDelay(int attemptNumber) {
+    final seconds =
+        retryBaseDelaySeconds * _pow(retryBackoffFactor, attemptNumber);
+    return Duration(seconds: seconds);
+  }
 
-  Duration retryDelay(int attempt) => Duration(
-        seconds: retryBaseDelaySeconds *
-            (SyncConstants.retryExponent * attempt).clamp(1, 60),
-      );
+  static int _pow(int base, int exponent) {
+    var result = 1;
+    for (var i = 0; i < exponent; i++) {
+      result *= base;
+    }
+    return result;
+  }
 }

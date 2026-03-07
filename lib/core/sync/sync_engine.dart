@@ -1,21 +1,41 @@
-import 'package:injectable/injectable.dart';
+import '../enums/operation_type.dart';
+import 'sync_event.dart';
+import 'sync_state.dart';
 
-import 'sync_config.dart';
-import 'sync_status.dart';
+/// The main sync engine interface.
+/// Orchestrates operation queue processing, conflict resolution,
+/// and connectivity-aware sync triggers.
+abstract class SyncEngine {
+  /// Starts the sync engine. Begins listening for triggers.
+  /// Must be called after DI initialization and authentication.
+  Future<void> start();
 
-// TODO(phase-1): Full implementation per specs/03_sync_engine.md
-@singleton
-class SyncEngine {
-  SyncEngine(this._config);
+  /// Stops the sync engine. Detaches all listeners.
+  /// Called on logout or app termination.
+  Future<void> stop();
 
-  // ignore: unused_field — will be used in phase-1 implementation
-  final SyncConfig _config;
+  /// Triggers an immediate full sync (push pending + pull remote).
+  Future<void> syncNow();
 
-  Future<void> trigger(SyncTrigger trigger) async {
-    // TODO(phase-1): Push pending operations, then pull remote changes
-  }
+  /// Enqueues a sync operation for a local write.
+  /// Called by repository implementations after every local write.
+  /// When online, also triggers an immediate push of this operation.
+  Future<void> enqueueOperation({
+    required String entityType,
+    required String entityId,
+    required OperationType operationType,
+    required String payload,
+  });
 
-  Future<void> processPendingOperations() async {
-    // TODO(phase-1): Dequeue and execute pending sync operations
-  }
+  /// Stream of high-level sync state changes.
+  Stream<SyncState> get stateStream;
+
+  /// Stream of individual sync events (for UI notifications).
+  Stream<SyncEvent> get eventStream;
+
+  /// Current sync state snapshot.
+  SyncState get currentState;
+
+  /// Number of pending operations in the queue.
+  Future<int> get pendingOperationCount;
 }
