@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/deep_links/deep_link_redirect_cubit.dart';
+import '../core/deep_links/deep_link_service.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import '../features/family/presentation/bloc/active_profile_cubit.dart';
 import '../features/family/presentation/bloc/family_bloc.dart';
@@ -9,8 +13,41 @@ import '../shared/theme/app_theme.dart';
 import 'di/injection.dart';
 import 'router/app_router.dart';
 
-class FamilyChoresApp extends StatelessWidget {
+class FamilyChoresApp extends StatefulWidget {
   const FamilyChoresApp({super.key});
+
+  @override
+  State<FamilyChoresApp> createState() => _FamilyChoresAppState();
+}
+
+class _FamilyChoresAppState extends State<FamilyChoresApp> {
+  StreamSubscription<Uri>? _deepLinkSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeDeepLinks();
+  }
+
+  @override
+  void dispose() {
+    _deepLinkSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initializeDeepLinks() async {
+    final deepLinkService = getIt<DeepLinkService>();
+    final redirectCubit = getIt<DeepLinkRedirectCubit>();
+
+    final initialUri = await deepLinkService.getInitialUri();
+    if (initialUri != null) {
+      redirectCubit.setPendingLink(initialUri);
+    }
+
+    _deepLinkSubscription = deepLinkService.incomingUris.listen(
+      redirectCubit.setPendingLink,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +57,7 @@ class FamilyChoresApp extends StatelessWidget {
         BlocProvider.value(value: getIt<FamilyBloc>()),
         BlocProvider.value(value: getIt<ActiveProfileCubit>()),
         BlocProvider.value(value: getIt<PinCubit>()),
+        BlocProvider.value(value: getIt<DeepLinkRedirectCubit>()),
       ],
       child: MultiBlocListener(
         listeners: [

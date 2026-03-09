@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:injectable/injectable.dart';
 
+import '../../core/deep_links/deep_link_redirect_cubit.dart';
 import '../../features/auth/domain/repositories/onboarding_repository.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
@@ -32,6 +33,7 @@ class AppRouter {
     FamilyBloc familyBloc,
     ActiveProfileCubit activeProfileCubit,
     PinCubit pinCubit,
+    DeepLinkRedirectCubit deepLinkRedirectCubit,
   ) : router = GoRouter(
           initialLocation: RouteNames.splash,
           debugLogDiagnostics: true,
@@ -40,6 +42,7 @@ class AppRouter {
             familyBloc.stream,
             activeProfileCubit.stream,
             pinCubit.stream,
+            deepLinkRedirectCubit.stream,
           ]),
           redirect: (context, state) => _redirect(
             state: state,
@@ -50,6 +53,7 @@ class AppRouter {
             activeProfileId: activeProfileCubit.state?.id,
             isParentProfile: activeProfileCubit.state?.isParent ?? false,
             isPinSessionActive: pinCubit.isSessionActive,
+            pendingDeepLink: deepLinkRedirectCubit.state,
           ),
           routes: [
             GoRoute(
@@ -59,6 +63,12 @@ class AppRouter {
             GoRoute(
               path: RouteNames.onboarding,
               builder: (context, state) => const OnboardingScreen(),
+            ),
+            GoRoute(
+              path: RouteNames.externalJoin,
+              builder: (context, state) => JoinFamilyScreen(
+                initialCode: state.uri.queryParameters['code'],
+              ),
             ),
             GoRoute(
               path: RouteNames.signIn,
@@ -123,6 +133,7 @@ String? _redirect({
   required String? activeProfileId,
   required bool isParentProfile,
   required bool isPinSessionActive,
+  required Uri? pendingDeepLink,
 }) {
   final location = state.matchedLocation;
   const publicRoutes = {
@@ -130,6 +141,7 @@ String? _redirect({
     RouteNames.onboarding,
     RouteNames.signIn,
     RouteNames.signUp,
+    RouteNames.externalJoin,
   };
   const familyRoutes = {
     RouteNames.familySetup,
@@ -152,15 +164,30 @@ String? _redirect({
         location != RouteNames.onboarding) {
       return RouteNames.onboarding;
     }
+    if (location == RouteNames.externalJoin || location == RouteNames.signIn) {
+      return RouteNames.signIn;
+    }
     return publicRoutes.contains(location) ? null : RouteNames.signIn;
   }
+
+  final pendingJoinRoute = _pendingJoinRoute(pendingDeepLink);
 
   if (familyState is FamilyInitial || familyState is FamilyLoading) {
     return location == RouteNames.splash ? null : RouteNames.splash;
   }
 
   if (familyState is FamilyNotFound) {
+    if (pendingJoinRoute != null && location != pendingJoinRoute) {
+      return pendingJoinRoute;
+    }
+    if (location == RouteNames.externalJoin) {
+      return _joinRouteFromState(state);
+    }
     return familyRoutes.contains(location) ? null : RouteNames.familySetup;
+  }
+
+  if (location == RouteNames.externalJoin) {
+    return hasActiveProfile ? RouteNames.home : RouteNames.profileSwitcher;
   }
 
   if ((familyState is FamilyLoaded ||
@@ -183,6 +210,26 @@ String? _redirect({
   }
 
   return null;
+}
+
+String _joinRouteFromState(GoRouterState state) {
+  final code = state.uri.queryParameters['code'];
+  if (code == null || code.isEmpty) {
+    return RouteNames.joinFamily;
+  }
+  return '${RouteNames.joinFamily}?code=$code';
+}
+
+String? _pendingJoinRoute(Uri? pendingDeepLink) {
+  if (pendingDeepLink == null) {
+    return null;
+  }
+  final isJoinPath = pendingDeepLink.path == RouteNames.externalJoin;
+  final code = pendingDeepLink.queryParameters['code'];
+  if (!isJoinPath || code == null || code.isEmpty) {
+    return null;
+  }
+  return '${RouteNames.joinFamily}?code=$code';
 }
 
 class GoRouterRefreshStream extends ChangeNotifier {

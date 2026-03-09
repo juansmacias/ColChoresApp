@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../app/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../../core/deep_links/deep_link_redirect_cubit.dart';
 import '../../../../app/router/route_names.dart';
 import '../bloc/family_bloc.dart';
 
@@ -18,6 +20,14 @@ class JoinFamilyScreen extends StatefulWidget {
 class _JoinFamilyScreenState extends State<JoinFamilyScreen> {
   late final TextEditingController _controller =
       TextEditingController(text: widget.initialCode ?? '');
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialCode != null && widget.initialCode!.isNotEmpty) {
+      getIt<DeepLinkRedirectCubit>().clearPendingLink();
+    }
+  }
 
   @override
   void dispose() {

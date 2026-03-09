@@ -39,7 +39,9 @@ class MemberRepositoryImpl implements MemberRepository {
   }) async {
     try {
       final now = DateTime.now();
-      final remoteId = _idGenerator.generate();
+      final remoteId = role == MemberRole.parent && userId != null
+          ? userId
+          : _idGenerator.generate();
 
       final localId = await _memberLocalDataSource.insertMember(
         MembersTableCompanion.insert(

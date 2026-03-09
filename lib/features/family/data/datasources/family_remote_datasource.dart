@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:injectable/injectable.dart';
 
+typedef JoinedFamilyPayload = ({String familyId, String familyName});
+
 @lazySingleton
 class FamilyRemoteDataSource {
   FamilyRemoteDataSource(this._functions);
@@ -15,7 +17,7 @@ class FamilyRemoteDataSource {
     return response.data['inviteCode'] as String;
   }
 
-  Future<String> validateAndJoinFamily({
+  Future<JoinedFamilyPayload> validateAndJoinFamily({
     required String inviteCode,
     required String userId,
     required String userName,
@@ -28,6 +30,9 @@ class FamilyRemoteDataSource {
         'userName': userName,
       },
     );
-    return response.data['familyId'] as String;
+    return (
+      familyId: response.data['familyId'] as String,
+      familyName: response.data['familyName'] as String,
+    );
   }
 }

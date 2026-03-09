@@ -1,6 +1,7 @@
 abstract class RouteNames {
   static const splash = '/splash';
   static const onboarding = '/onboarding';
+  static const externalJoin = '/join';
   static const home = '/';
   static const signIn = '/sign-in';
   static const signUp = '/sign-up';

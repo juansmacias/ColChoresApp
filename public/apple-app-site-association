@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "34ALGUQDF2.com.juansmacias.familychores.familyChoresApp",
+        "paths": [
+          "/join",
+          "/join?*"
+        ]
+      }
+    ]
+  }
+}

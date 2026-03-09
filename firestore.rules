@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function parentMemberDoc(familyId) {
+      return /databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid);
+    }
+
+    function isFamilyParent(familyId) {
+      return isAuthenticated()
+        && exists(parentMemberDoc(familyId))
+        && get(parentMemberDoc(familyId)).data.role == 'parent';
+    }
+
+    function isFamilyMember(familyId) {
+      return isAuthenticated()
+        && exists(parentMemberDoc(familyId));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function onlyUpdatingFields(allowedFields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+    }
+
+    match /families/{familyId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated()
+        && request.resource.data.createdBy == request.auth.uid
+        && hasRequiredFields(['name', 'createdBy', 'createdAt', 'updatedAt']);
+
+      allow update: if isFamilyParent(familyId)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['inviteCode', 'inviteCodeExpiresAt', 'createdBy']);
+
+      allow delete: if false;
+
+      match /members/{memberId} {
+        allow read: if isAuthenticated() && isFamilyMember(familyId);
+
+        allow create: if isFamilyParent(familyId)
+          && hasRequiredFields(['name', 'role', 'age', 'accentColor', 'createdAt', 'updatedAt']);
+
+        allow update: if isFamilyParent(familyId)
+          || (
+            isAuthenticated()
+            && memberId == request.auth.uid
+            && onlyUpdatingFields(['name', 'avatarUrl', 'accentColor', 'updatedAt', 'pinHash', 'pinSalt'])
+          );
+
+        allow delete: if isFamilyParent(familyId)
+          && memberId != request.auth.uid;
+      }
+
+      match /tasks/{taskId} {
+        allow read, write: if false;
+        match /audit_log/{logId} {
+          allow read, write: if false;
+        }
+      }
+
+      match /rewards/{rewardId} {
+        allow read, write: if false;
+      }
+
+      match /redemptions/{redemptionId} {
+        allow read, write: if false;
+      }
+
+      match /categories/{categoryId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}

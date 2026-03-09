@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,6 +17,9 @@ abstract class ExternalModule {
 
   @singleton
   Uuid get uuid => const Uuid();
+
+  @singleton
+  AppLinks get appLinks => AppLinks();
 
   @singleton
   FirebaseFirestore get firebaseFirestore => FirebaseFirestore.instance;

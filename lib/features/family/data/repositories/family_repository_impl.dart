@@ -42,7 +42,7 @@ class FamilyRepositoryImpl implements FamilyRepository {
     try {
       final now = DateTime.now();
       final familyId = _idGenerator.generate();
-      final memberId = _idGenerator.generate();
+      final memberId = createdByUid;
 
       final localId = await _familyLocalDataSource.insertFamily(
         FamiliesTableCompanion.insert(
@@ -226,11 +226,12 @@ class FamilyRepositoryImpl implements FamilyRepository {
     required String userName,
   }) async {
     try {
-      final familyId = await _familyRemoteDataSource.validateAndJoinFamily(
+      final joinedFamily = await _familyRemoteDataSource.validateAndJoinFamily(
         inviteCode: inviteCode,
         userId: userId,
         userName: userName,
       );
+      final familyId = joinedFamily.familyId;
 
       final existing =
           await _familyLocalDataSource.getFamilyByRemoteId(familyId);
@@ -238,10 +239,46 @@ class FamilyRepositoryImpl implements FamilyRepository {
         return Result.success(_toFamily(existing));
       }
 
-      return Result.failure(
-        const NetworkFailure(
-          message:
-              'Family join succeeded remotely, but local sync is not ready yet.',
+      final now = DateTime.now();
+      final localFamilyId = await _familyLocalDataSource.insertFamily(
+        FamiliesTableCompanion.insert(
+          remoteId: Value(familyId),
+          name: joinedFamily.familyName,
+          createdBy: userId,
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: const Value(SyncStatus.synced),
+          lastSyncedAt: Value(now),
+        ),
+      );
+
+      await _memberLocalDataSource.insertMember(
+        MembersTableCompanion.insert(
+          remoteId: Value(userId),
+          familyId: familyId,
+          name: userName,
+          role: MemberRole.parent,
+          age: 30,
+          avatarUrl: const Value('avatar_bear'),
+          accentColor: '#A8D8EA',
+          userId: Value(userId),
+          points: const Value(0),
+          currentStreak: const Value(0),
+          longestStreak: const Value(0),
+          createdAt: now,
+          updatedAt: now,
+          syncStatus: const Value(SyncStatus.synced),
+          lastSyncedAt: Value(now),
+        ),
+      );
+
+      return Result.success(
+        Family(
+          id: localFamilyId.toString(),
+          remoteId: familyId,
+          name: joinedFamily.familyName,
+          createdBy: userId,
+          createdAt: now,
         ),
       );
     } catch (error, stackTrace) {

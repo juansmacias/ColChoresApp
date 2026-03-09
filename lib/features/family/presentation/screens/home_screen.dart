@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../../app/di/injection.dart';
 import '../../../../app/router/route_names.dart';
+import '../../domain/repositories/family_repository.dart';
 import '../bloc/active_profile_cubit.dart';
 import '../bloc/family_bloc.dart';
 
@@ -18,6 +21,15 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(family?.name ?? 'Family Chores'),
         actions: [
+          IconButton(
+            onPressed: family == null
+                ? null
+                : () => _shareInviteCode(
+                      context,
+                      family.syncId,
+                    ),
+            icon: const Icon(Icons.share_outlined),
+          ),
           IconButton(
             onPressed: () => context.go(RouteNames.profileSwitcher),
             icon: const Icon(Icons.switch_account_rounded),
@@ -51,6 +63,31 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _shareInviteCode(
+    BuildContext context,
+    String familyId,
+  ) async {
+    final result = await getIt<FamilyRepository>().generateInviteCode(familyId);
+    await result.when(
+      success: (inviteCode) async {
+        await SharePlus.instance.share(
+          ShareParams(
+            text: 'Join our family on Family Chores: '
+                'https://familychores.app/join?code=$inviteCode',
+          ),
+        );
+      },
+      failure: (failure) async {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(failure.message)));
+      },
     );
   }
 }
