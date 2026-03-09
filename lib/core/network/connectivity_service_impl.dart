@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:injectable/injectable.dart';
@@ -7,6 +6,7 @@ import 'package:rxdart/rxdart.dart';
 
 import 'connectivity_service.dart';
 import 'connectivity_status.dart';
+import 'reachability_check.dart';
 
 @LazySingleton(as: ConnectivityService)
 class ConnectivityServiceImpl implements ConnectivityService {
@@ -89,15 +89,10 @@ class ConnectivityServiceImpl implements ConnectivityService {
       return _reachabilityChecker();
     }
 
-    try {
-      final results = await InternetAddress.lookup(_reachabilityHost)
-          .timeout(_reachabilityTimeout);
-      return results.isNotEmpty && results.first.rawAddress.isNotEmpty;
-    } on SocketException {
-      return false;
-    } on TimeoutException {
-      return false;
-    }
+    return checkInternetReachability(
+      host: _reachabilityHost,
+      timeout: _reachabilityTimeout,
+    );
   }
 
   void _emitStatus(ConnectivityStatus status) {
