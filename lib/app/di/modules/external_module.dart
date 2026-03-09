@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:injectable/injectable.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -19,8 +21,14 @@ abstract class ExternalModule {
   FirebaseFirestore get firebaseFirestore => FirebaseFirestore.instance;
 
   @singleton
+  FirebaseFunctions get firebaseFunctions => FirebaseFunctions.instance;
+
+  @singleton
   FirebaseAuth get firebaseAuth => FirebaseAuth.instance;
 
   @singleton
   GoogleSignIn get googleSignIn => GoogleSignIn.standard();
+
+  @singleton
+  LocalAuthentication get localAuthentication => LocalAuthentication();
 }

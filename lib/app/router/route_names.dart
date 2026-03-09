@@ -7,6 +7,7 @@ abstract class RouteNames {
   static const familySetup = '/family-setup';
   static const createFamily = '/family-setup/create';
   static const joinFamily = '/family-setup/join';
+  static const addMember = '/family-setup/add-member';
   static const profileSwitcher = '/profiles';
   static const taskList = '/tasks';
   static const taskDetail = '/tasks/:taskId';

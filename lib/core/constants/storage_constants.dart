@@ -17,4 +17,5 @@ abstract class StorageConstants {
 
   // App preferences
   static const String hasSeenOnboardingKey = 'has_seen_onboarding';
+  static const String activeProfileIdKey = 'active_profile_id';
 }
