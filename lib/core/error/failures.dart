@@ -59,7 +59,7 @@ final class ValidationFailure extends Failure {
   List<Object?> get props => [...super.props, fieldErrors];
 }
 
-final class AuthFailure extends Failure {
+class AuthFailure extends Failure {
   const AuthFailure({
     required super.message,
     super.code,

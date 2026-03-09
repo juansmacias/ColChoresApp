@@ -1,21 +1,21 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:injectable/injectable.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'connectivity_service.dart';
 import 'connectivity_status.dart';
 import 'reachability_check.dart';
 
-@LazySingleton(as: ConnectivityService)
+typedef ReachabilityChecker = Future<bool> Function();
+
 class ConnectivityServiceImpl implements ConnectivityService {
   ConnectivityServiceImpl(
     this._connectivity, {
     Duration debounceDuration = const Duration(seconds: 2),
     Duration reachabilityTimeout = const Duration(seconds: 3),
     String reachabilityHost = 'dns.google',
-    Future<bool> Function()? reachabilityChecker,
+    ReachabilityChecker? reachabilityChecker,
   })  : _debounceDuration = debounceDuration,
         _reachabilityTimeout = reachabilityTimeout,
         _reachabilityHost = reachabilityHost,
@@ -27,7 +27,7 @@ class ConnectivityServiceImpl implements ConnectivityService {
   final Duration _debounceDuration;
   final Duration _reachabilityTimeout;
   final String _reachabilityHost;
-  final Future<bool> Function()? _reachabilityChecker;
+  final ReachabilityChecker? _reachabilityChecker;
 
   final BehaviorSubject<ConnectivityStatus> _statusSubject =
       BehaviorSubject<ConnectivityStatus>.seeded(ConnectivityStatus.offline);

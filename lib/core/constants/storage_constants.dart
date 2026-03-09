@@ -14,4 +14,7 @@ abstract class StorageConstants {
   // Schema versioning
   static const int currentSchemaVersion = 1;
   static const String schemaVersionKey = 'db_schema_version';
+
+  // App preferences
+  static const String hasSeenOnboardingKey = 'has_seen_onboarding';
 }
