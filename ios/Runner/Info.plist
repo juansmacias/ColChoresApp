@@ -22,6 +22,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>familychores</string>
+                <string>com.googleusercontent.apps.613454970510-vaiu9sf6kfji6q869q7m8583rbnn6sg5</string>
 			</array>
 		</dict>
 	</array>
@@ -79,5 +80,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+    <key>GIDClientID</key>
+    <string>613454970510-vaiu9sf6kfji6q869q7m8583rbnn6sg5.apps.googleusercontent.com</string>
 </dict>
 </plist>

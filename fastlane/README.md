@@ -1,81 +1,85 @@
-# Fastlane
+fastlane documentation
+----
 
-Repo-root `fastlane` lanes for Flutter screenshots and store deployment.
+# Installation
 
-## Setup
+Make sure you have the latest version of the Xcode command line tools installed:
 
-```bash
-bundle install
+```sh
+xcode-select --install
 ```
+
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
+
+# Available Actions
 
 ## Android
 
-Build a release APK:
+### android build_apk
 
-```bash
-bundle exec fastlane android build_apk
+```sh
+[bundle exec] fastlane android build_apk
 ```
 
-Capture a screenshot from a booted emulator/device:
+Build a release APK with Flutter
 
-```bash
-bundle exec fastlane android screenshot
+### android build_aab
+
+```sh
+[bundle exec] fastlane android build_aab
 ```
 
-Optional:
+Build a release App Bundle with Flutter
 
-- `ANDROID_SERIAL=<device-id>` to target a specific emulator/device
-- `FASTLANE_SCREENSHOT_DELAY=8` to wait longer before capture
+### android screenshot
 
-Deploy to Google Play internal track:
-
-```bash
-SUPPLY_JSON_KEY=/absolute/path/to/google-play-service-account.json \
-bundle exec fastlane android deploy
+```sh
+[bundle exec] fastlane android screenshot
 ```
 
-Optional:
+Install the debug APK on a booted emulator/device and capture a screenshot
 
-- `FASTLANE_ANDROID_TRACK=production|beta|internal`
-- `FASTLANE_ANDROID_PACKAGE_NAME=com.example.app`
+### android deploy
+
+```sh
+[bundle exec] fastlane android deploy
+```
+
+Upload the release App Bundle to Google Play
+
+----
+
 
 ## iOS
 
-Build a release IPA:
+### ios build_ipa
 
-```bash
-bundle exec fastlane ios build_ipa
+```sh
+[bundle exec] fastlane ios build_ipa
 ```
 
-Capture a screenshot from a booted simulator:
+Build a signed iOS IPA with Flutter
 
-```bash
-bundle exec fastlane ios screenshot
+### ios screenshot
+
+```sh
+[bundle exec] fastlane ios screenshot
 ```
 
-Optional:
+Install the simulator build on a booted iOS simulator and capture a screenshot
 
-- `IOS_SIMULATOR_DEVICE=<simulator-udid-or-booted>`
-- `FASTLANE_SCREENSHOT_DELAY=8`
+### ios deploy
 
-Deploy to TestFlight:
-
-```bash
-APP_STORE_CONNECT_KEY_ID=... \
-APP_STORE_CONNECT_ISSUER_ID=... \
-APP_STORE_CONNECT_KEY_FILE=/absolute/path/to/AuthKey_ABC123XYZ.p8 \
-bundle exec fastlane ios deploy
+```sh
+[bundle exec] fastlane ios deploy
 ```
 
-Optional:
+Upload the Flutter-built IPA to TestFlight
 
-- `FASTLANE_APP_IDENTIFIER=com.example.app`
-- `FASTLANE_APPLE_ID=name@example.com`
-- `FASTLANE_TEAM_ID=<developer-team-id>`
-- `FASTLANE_ITC_TEAM_ID=<app-store-connect-team-id>`
+----
 
-## Notes
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
 
-- Android deployment uploads the generated `.aab`, not the `.apk`.
-- iOS deployment uploads to TestFlight; App Store production submission is a separate release step.
-- Screenshot lanes capture the launched app on an already booted simulator/emulator. If you need in-app navigation screenshots, add deterministic UI automation first.
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
+
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).
