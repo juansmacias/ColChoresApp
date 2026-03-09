@@ -1,0 +1,19 @@
+targets:
+  $default:
+    builders:
+      injectable_generator|injectable_builder:
+        generate_for:
+          - lib/**
+      drift_dev:
+        generate_for:
+          - lib/core/database/**
+          - lib/features/**/models/**
+          - lib/core/sync/**
+      freezed|freezed:
+        generate_for:
+          - lib/features/**/entities/**
+          - lib/features/**/models/**
+          - lib/core/**
+      json_serializable:
+        generate_for:
+          - lib/features/**/models/**

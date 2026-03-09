@@ -4,7 +4,7 @@
 
 ### 1.1 Summary
 
-This specification defines the sync engine -- the most architecturally significant component of the Family Chores App. The sync engine mediates all data flow between the local Isar database and Firebase Firestore, enabling the offline-first experience. It comprises three sub-components: the OperationQueue (FIFO processing of local writes), the ConflictResolver (Last-Write-Wins with audit trail), and the SyncOrchestrator (trigger management, push/pull coordination, isolate execution).
+This specification defines the sync engine -- the most architecturally significant component of the Family Chores App. The sync engine mediates all data flow between the local Drift database and Firebase Firestore, enabling the offline-first experience. It comprises three sub-components: the OperationQueue (FIFO processing of local writes), the ConflictResolver (Last-Write-Wins with audit trail), and the SyncOrchestrator (trigger management, push/pull coordination, isolate execution).
 
 ### 1.2 Business Context
 
@@ -105,14 +105,14 @@ The offline-first constraint is non-negotiable (see `specs/00_project_foundation
 |                                                                        |
 |  Dependencies:                                                         |
 |  - ConnectivityService (from specs/04_connectivity_monitor.md)         |
-|  - Isar instance (for SyncOperationEntity and entity collections)      |
+|  - AppDatabase instance (for SyncOperationEntity and entity collections)      |
 |  - Firestore instance (for remote reads/writes)                        |
 |  - EntitySyncAdapters (type-specific serializers, per entity type)     |
 +-----------------------------------------------------------------------+
          |                    |                     |
          v                    v                     v
   +-------------+    +----------------+    +------------------+
-  | Isar (Local)|    | Firestore      |    | ConnectivitySvc  |
+  | Drift/SQLite (Local)|    | Firestore      |    | ConnectivitySvc  |
   | Database    |    | (Remote)       |    | (Network state)  |
   +-------------+    +----------------+    +------------------+
 ```
@@ -165,7 +165,7 @@ abstract class SyncEngine {
 // lib/core/sync/operation_queue.dart
 
 /// Manages the FIFO queue of pending sync operations.
-/// Backed by the SyncOperationEntity Isar collection.
+/// Backed by the SyncOperationEntity Drift table.
 abstract class OperationQueue {
   /// Adds a new operation to the queue.
   Future<void> enqueue(SyncOperationEntity operation);
@@ -600,7 +600,7 @@ Future<PushResult> _pushPendingOperations() async {
 #### 4.3.3 Pull Flow
 
 ```dart
-/// Pulls latest state from Firestore into local Isar.
+/// Pulls latest state from Firestore into local Drift.
 /// Uses Firestore snapshot listeners for real-time updates when online.
 Future<void> _pullRemoteChanges(String familyId) async {
   for (final adapter in _adapters.values) {
@@ -734,11 +734,11 @@ The sync engine runs heavy operations in a separate Dart isolate to prevent UI j
 /// Architecture:
 /// Main Isolate <-> SendPort/ReceivePort <-> Sync Isolate
 ///                                             |
-///                                        Opens own Isar instance
+///                                        Opens own AppDatabase instance
 ///                                        Opens own Firestore instance
 ///
-/// The sync isolate opens the SAME Isar database (same name + directory)
-/// which Isar supports for concurrent multi-isolate access.
+/// The sync isolate opens the SAME Drift database (same name + directory)
+/// which Drift/SQLite supports for concurrent access.
 
 class SyncIsolateManager {
   Isolate? _isolate;
@@ -747,14 +747,14 @@ class SyncIsolateManager {
 
   /// Spawns the sync isolate and establishes communication.
   Future<void> spawn({
-    required String isarDirectory,
+    required String dbDirectory,
     required String familyId,
   }) async {
     _isolate = await Isolate.spawn(
       _syncIsolateEntryPoint,
       SyncIsolateConfig(
         sendPort: _receivePort.sendPort,
-        isarDirectory: isarDirectory,
+        dbDirectory: dbDirectory,
         familyId: familyId,
       ),
     );
@@ -780,8 +780,8 @@ void _syncIsolateEntryPoint(SyncIsolateConfig config) async {
   final receivePort = ReceivePort();
   config.sendPort.send(receivePort.sendPort);
 
-  // Open Isar in this isolate (same DB, concurrent access)
-  final isar = await openDatabaseInIsolate(config.isarDirectory);
+  // Open Drift DB in this isolate (same DB, concurrent access)
+  final db = await openDatabaseInIsolate(config.dbDirectory);
 
   // Process commands from main isolate
   await for (final command in receivePort) {
@@ -931,8 +931,8 @@ When a sync batch partially fails:
 ```dart
 /// Called on engine start to recover from interrupted syncs.
 Future<void> _recoverInterruptedOperations() async {
-  await _isar.writeTxn(() async {
-    final interrupted = await _isar.syncOperationEntitys
+  await db.writeTxn(() async {
+    final interrupted = await db.syncOperationEntitys
         .filter()
         .statusEqualTo('inProgress')
         .findAll();
@@ -940,7 +940,7 @@ Future<void> _recoverInterruptedOperations() async {
     for (final op in interrupted) {
       op.status = 'pending';
       // Do NOT increment retryCount -- the retry was interrupted, not failed
-      await _isar.syncOperationEntitys.put(op);
+      await db.syncOperationEntitys.put(op);
     }
   });
 }
@@ -1001,7 +1001,7 @@ Future<void> _recoverInterruptedOperations() async {
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | Conflict resolution produces incorrect winner | Medium | **High** | Comprehensive unit tests for all 5 conflict scenarios. Audit log preserves losing writes. |
-| Queue corruption causes operation loss | Low | **High** | Isar transactions ensure atomicity. Recovery logic for interrupted operations. |
+| Queue corruption causes operation loss | Low | **High** | Drift transactions ensure atomicity. Recovery logic for interrupted operations. |
 | Isolate communication failure | Medium | Medium | Fallback to main-isolate sync with warning about potential UI jank. |
 | Exponential backoff causes sync starvation | Low | Medium | Cap maximum backoff at 16s (3 retries then fail). Periodic sync resets the backoff. |
 | Memory pressure from large payloads in queue | Low | Medium | Payload is JSON string, typically < 1 KB. Monitor queue size. |
@@ -1066,7 +1066,7 @@ Future<void> _recoverInterruptedOperations() async {
 ### 9.1 Suggested Approach
 
 1. Implement `SyncConfig` constants.
-2. Implement `OperationQueue` backed by Isar `SyncOperationEntity`.
+2. Implement `OperationQueue` backed by Drift `SyncOperationEntity`.
 3. Write all queue unit tests (SE-FT-001 through SE-FT-009).
 4. Implement `ConflictResolver` with LWW algorithm.
 5. Write all conflict resolution tests (SE-FT-010 through SE-FT-016).
@@ -1085,9 +1085,9 @@ The sync engine is the highest-complexity, highest-risk component. Extensive tes
 
 ### 9.3 Testing Strategy
 
-- **Unit tests:** Mock Isar and Firestore. Test all paths through the queue, resolver, and orchestrator.
-- **Integration tests:** Use real Isar (in-memory) and Firestore emulator. Test full sync flow.
-- **Mocking:** Use `mocktail` for all external dependencies. Create `FakeIsar` for in-memory testing.
+- **Unit tests:** Mock AppDatabase and Firestore. Test all paths through the queue, resolver, and orchestrator.
+- **Integration tests:** Use real Drift (in-memory) and Firestore emulator. Test full sync flow.
+- **Mocking:** Use `mocktail` for all external dependencies. Create `FakeDatabase` for in-memory testing.
 
 See `specs/07_phase1_test_plan.md` for the complete test plan.
 

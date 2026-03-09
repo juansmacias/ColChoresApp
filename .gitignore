@@ -79,6 +79,11 @@ firestore.indexes.json
 .env.production
 !.env.example
 
+# Fastlane
+/fastlane/report.xml
+/fastlane/Preview.html
+/fastlane/screenshots
+
 # Isar
 *.isar
 *.isar.lock

@@ -280,14 +280,14 @@ The architecture follows a **layered, offline-first** pattern with clear separat
 
 1. **State Management: BLoC/Cubit** -- Chosen for its strict separation of UI and logic, testability, and stream-based reactivity that maps naturally to offline-first data flows.
 
-2. **Local Database: Isar** -- Selected over Hive and Drift for the following reasons:
-   - Isar provides full-text search, composite indexes, and multi-isolate support -- critical for querying tasks by assignee, date, category, and status without performance degradation.
-   - Isar's object-based schema maps cleanly to Firestore documents, reducing serialization complexity.
-   - Isar supports lazy loading and pagination natively, satisfying the performance guidelines in development-rules.md ("pagination is mandatory for any list query").
-   - Hive was rejected because it lacks query capabilities (it is a key-value store) and requires manual indexing. For a relational data model with tasks, members, rewards, and categories, this creates unnecessary complexity.
-   - Drift was considered (strong SQL query support) but rejected because it introduces an ORM abstraction over SQLite that adds cognitive load when the data model is document-oriented (matching Firestore's document model). Isar's NoSQL approach provides a more natural mapping.
+2. **Local Database: Drift** -- Selected over Isar and Hive for the following reasons:
+   - Isar 3.x requires Dart <3.0.0 and is incompatible with the project's Dart 3.11.1 SDK. This was the deciding factor.
+   - Drift provides type-safe SQL query builder, composite indexes, and code-generated DAOs — meeting all query requirements (by assignee, date, category, status).
+   - Drift's `TypeConverter` API maps Dart types (enums, custom classes) to SQL columns cleanly, with minimal boilerplate.
+   - Drift's `@TableIndex` annotation supports the same composite indexes that were originally planned for Isar.
+   - Hive was rejected because it lacks query capabilities (key-value only) and requires manual indexing.
 
-3. **Sync Engine: Custom implementation** -- A dedicated sync engine manages the bidirectional flow between Isar (local) and Firestore (remote). This is the most architecturally significant component.
+3. **Sync Engine: Custom implementation** -- A dedicated sync engine manages the bidirectional flow between Drift (local) and Firestore (remote). This is the most architecturally significant component.
 
 4. **Dependency Injection: get_it + injectable** -- Compile-time DI registration supporting the Dependency Inversion Principle.
 
@@ -329,7 +329,7 @@ The architecture follows a **layered, offline-first** pattern with clear separat
 |                                                                   |
 |  +------------------------------+  +---------------------------+  |
 |  |    Local Data Source          |  |   Remote Data Source      |  |
-|  |    (Isar Database)            |  |   (Firestore)            |  |
+|  |    (Drift/SQLite)             |  |   (Firestore)            |  |
 |  |                              |  |                           |  |
 |  |  +----------+ +----------+  |  |  +----------+ +--------+  |  |
 |  |  | TaskDAO  | | MemberDAO|  |  |  |TaskRemote| |MemberR..|  |  |
@@ -364,7 +364,7 @@ The sync engine is the core architectural component that enables the offline-fir
 
 #### 4.4.1 Operation Queue
 
-Every write operation (create, update, delete) performed locally is recorded as a `SyncOperation` in a dedicated Isar collection:
+Every write operation (create, update, delete) performed locally is recorded as a `SyncOperation` in a dedicated Drift collection:
 
 ```
 SyncOperation {
@@ -521,52 +521,57 @@ families/
         sortOrder: int
 ```
 
-#### 4.5.2 Isar Local Schema (mirrors Firestore)
+#### 4.5.2 Drift Local Schema (mirrors Firestore)
 
-The local Isar schema mirrors the Firestore structure with additional sync metadata fields:
+The local Drift schema mirrors the Firestore structure with additional sync metadata columns:
 
 ```dart
-@collection
-class TaskEntity {
-  Id id = Isar.autoIncrement;
+@TableIndex(name: 'tasks_remote_id', columns: {#remoteId}, unique: true)
+@TableIndex(name: 'tasks_family_status_due', columns: {#familyId, #status, #dueDate})
+@TableIndex(name: 'tasks_family_completed', columns: {#familyId, #completedAt})
+class TasksTable extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable()();  // Firestore document ID
 
-  @Index(unique: true)
-  late String remoteId;         // Firestore document ID
-
-  late String familyId;
-  late String title;
-  String? description;
-  late String category;
-  late List<String> assigneeIds;
-  late String createdBy;
-  DateTime? dueDate;
-  String? dueTime;
-  String? recurrenceRule;
-  late int points;
-  @Enumerated(EnumType.name)
-  late AgeGroup ageGroup;
-  @Enumerated(EnumType.name)
-  late TaskStatus status;
-  late bool requiresVerification;
-  late bool requiresPhoto;
-  late List<SubtaskEntity> subtasks;
-  DateTime? completedAt;
-  String? completedBy;
-  DateTime? verifiedAt;
-  String? verifiedBy;
-  String? localPhotoPath;       // Local file path before upload
-  String? photoUrl;             // Remote URL after upload
-  late DateTime createdAt;
-  late DateTime updatedAt;
+  TextColumn get familyId => text()();
+  TextColumn get title => text()();
+  TextColumn get description => text().nullable()();
+  TextColumn get category => text()();
+  TextColumn get assigneeIds => text()                // JSON List<String>
+      .withDefault(const Constant('[]'))
+      .map(const StringListConverter())();
+  TextColumn get createdBy => text()();
+  DateTimeColumn get dueDate => dateTime().nullable()();
+  TextColumn get dueTime => text().nullable()();
+  TextColumn get recurrenceRule => text().nullable()();
+  IntColumn get points => integer().withDefault(const Constant(0))();
+  TextColumn get ageGroup => text().map(const AgeGroupConverter())();
+  TextColumn get status => text()
+      .withDefault(const Constant('pending'))
+      .map(const TaskStatusConverter())();
+  BoolColumn get requiresVerification => boolean().withDefault(const Constant(false))();
+  BoolColumn get requiresPhoto => boolean().withDefault(const Constant(false))();
+  TextColumn get subtasks => text()                   // JSON List<SubtaskModel>
+      .withDefault(const Constant('[]'))
+      .map(const SubtaskListConverter())();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+  TextColumn get completedBy => text().nullable()();
+  DateTimeColumn get verifiedAt => dateTime().nullable()();
+  TextColumn get verifiedBy => text().nullable()();
+  TextColumn get localPhotoPath => text().nullable()();
+  TextColumn get photoUrl => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   // Sync metadata (local only, not sent to Firestore)
-  @Enumerated(EnumType.name)
-  late SyncStatus syncStatus;   // synced, pending, conflict
-  DateTime? lastSyncedAt;
+  TextColumn get syncStatus => text()
+      .withDefault(const Constant('pending'))
+      .map(const SyncStatusConverter())();
+  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
 }
 ```
 
-Each entity type (Task, Member, Reward, Redemption, Category, Family) follows this pattern: a Firestore document schema plus an Isar entity with `remoteId`, `syncStatus`, and `lastSyncedAt` fields.
+Each entity type (Tasks, Members, Rewards, Redemptions, Categories, Families) follows this pattern: a Firestore document schema plus Drift columns for `remoteId`, `syncStatus`, and `lastSyncedAt`. See `lib/core/database/app_database.dart` for the full schema.
 
 #### 4.5.3 Indexes
 
@@ -709,7 +714,7 @@ All write operations update the UI immediately from local state. The user never 
 
 Example flow:
 1. User taps "Complete" on a task.
-2. Local Isar DB is updated immediately. BLoC emits new state with task completed.
+2. Local Drift DB is updated immediately. BLoC emits new state with task completed.
 3. UI renders the completion animation and updated task list.
 4. Sync operation is queued.
 5. (If online) Operation is sent to Firestore. If successful, `syncStatus` is updated silently. If a conflict occurs, BLoC emits a corrected state with a brief notification explaining what changed.
@@ -739,8 +744,8 @@ Example flow:
 | PIN configuration | Per-parent-profile | Synced (Firestore member document) |
 | Notification preferences | Per-profile | Synced |
 | Theme preference (light/dark) | Per-device | Local only |
-| Cached family data | Per-device | Local only (Isar) |
-| Sync queue | Per-device | Local only (Isar) |
+| Cached family data | Per-device | Local only (Drift) |
+| Sync queue | Per-device | Local only (Drift) |
 | Photo cache | Per-device | Local filesystem |
 
 ### 4.10 PIN Protection -- Detailed Design
@@ -765,7 +770,7 @@ Example flow:
 
 - PIN is 4-6 digits, set by each parent during onboarding or in settings.
 - PIN is hashed (SHA-256 with device-specific salt) before storage. Raw PIN is never persisted.
-- PIN hash is stored in the member's Isar record and synced to Firestore (so the same PIN works across devices).
+- PIN hash is stored in the member's Drift record and synced to Firestore (so the same PIN works across devices).
 - PIN entry UI: numeric keypad with large touch targets (per design system), subtle haptic feedback, PIN dots.
 - Failed attempts counter: stored locally per device session. Resets on app restart (to prevent lockout from sync issues).
 - Biometric unlock: optional, can be enabled per parent to bypass PIN entry via fingerprint or Face ID. Uses `local_auth` Flutter plugin.
@@ -808,7 +813,7 @@ Since this is a greenfield project, this table defines the components that must 
 | Component | Type | Risk Level | Notes |
 |-----------|------|------------|-------|
 | Sync Engine | New | **High** | Most complex component. Handles queuing, conflict resolution, partial failure, retry. Must be rock-solid. |
-| Isar Data Layer | New | **Medium** | Schema design, migrations, indexes. Risk is in data consistency across sync. |
+| Drift Data Layer | New | **Medium** | Schema design, migrations, indexes. Risk is in data consistency across sync. |
 | BLoC State Management | New | **Medium** | Must handle reactive updates from both user actions and sync events. |
 | Firebase Auth Integration | New | **Low** | Well-documented, standard Firebase Auth flow. |
 | Firestore Remote Data Source | New | **Medium** | Real-time listeners, batch writes, security rules. |
@@ -829,7 +834,7 @@ Since this is a greenfield project, this table defines the components that must 
 - Firestore service availability (for sync only -- app works without it)
 - Firebase Cloud Messaging service (for push notifications -- non-critical)
 - Google Play Services / Apple Push Notification service (for FCM delivery)
-- Device local storage (Isar database, filesystem for photos)
+- Device local storage (Drift database, filesystem for photos)
 - Device connectivity APIs
 
 **Downstream (affected by this app):**
@@ -844,14 +849,14 @@ N/A -- greenfield project. No existing users or data to migrate.
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | Sync conflicts cause data loss | Medium | High | LWW with full audit trail. Every losing write is preserved. Extensive integration tests for conflict scenarios. |
-| Isar schema migration breaks local data | Medium | High | Version all Isar schemas from day one. Write migration functions for every schema change. Test migrations with fixture data. |
+| Drift schema migration breaks local data | Medium | High | Version all Drift schemas from day one. Write migration functions for every schema change. Test migrations with fixture data. |
 | Sync queue grows unbounded during extended offline | Low | Medium | Cap queue at 1000 operations. Alert user if approaching limit. Oldest completed-and-synced operations are purged. |
 | PIN is forgotten | Medium | Low | Recovery flow: re-authenticate with Firebase Auth (email/password or social) to reset PIN. No PIN recovery without full auth. |
 | Children discover how to bypass PIN | Low | Medium | PIN check is enforced at the BLoC layer, not just the UI. Even if a child navigates to a protected route, the BLoC gate prevents data access. |
 | Firestore quota exceeded (free tier) | Low | Medium | Monitor usage via Firebase Analytics. Implement read batching and caching. Alert before approaching limits. |
 | Celebration animations impact performance on low-end devices | Medium | Low | Respect `prefers-reduced-motion`. Provide a "lite animations" toggle. Pre-cache Lottie files. |
 | Real-time listeners cause excessive Firestore reads | Medium | Medium | Scope listeners narrowly (per-family, with query filters). Detach listeners when app is backgrounded. Use local cache as primary data source, not Firestore. |
-| App size exceeds acceptable limits (fonts, animations, Isar) | Low | Low | Monitor APK/IPA size in CI. Tree-shake unused assets. Compress Lottie files. Target < 30 MB. |
+| App size exceeds acceptable limits (fonts, animations, Drift) | Low | Low | Monitor APK/IPA size in CI. Tree-shake unused assets. Compress Lottie files. Target < 30 MB. |
 
 ---
 
@@ -894,7 +899,7 @@ N/A -- greenfield project. No existing users or data to migrate.
 - **Family member removed while offline**: If a parent removes a member profile while another device is offline, the offline device should handle the member removal gracefully on sync (orphaned tasks reassigned or unassigned).
 - **Clock skew between devices**: The sync engine uses server timestamps (Firestore) as the source of truth, not local device clocks. Local timestamps are used only for queue ordering.
 - **Extremely long offline period (days/weeks)**: The sync queue must remain stable. On reconnection, a full reconciliation pull is performed before pushing queued operations to detect stale state.
-- **App killed mid-sync**: Isar transactions ensure atomicity. The sync engine tracks operation status in the queue. On restart, it resumes from the last incomplete operation.
+- **App killed mid-sync**: Drift transactions ensure atomicity. The sync engine tracks operation status in the queue. On restart, it resumes from the last incomplete operation.
 - **Photo captured offline, task deleted by another user before sync**: Photo is orphaned. Cleanup job removes orphaned local photos after 7 days.
 - **Reward redeemed offline, points changed by sync**: If sync reveals insufficient points (another device spent them), the redemption is rolled back with a notification: "Your reward redemption could not be completed because your points balance changed."
 
@@ -902,14 +907,14 @@ N/A -- greenfield project. No existing users or data to migrate.
 
 | Test Area | Setup | Validates |
 |-----------|-------|-----------|
-| Sync engine -- happy path | Two Isar instances simulating two devices, Firestore emulator | Operations from Device A appear on Device B after sync |
+| Sync engine -- happy path | Two Drift instances simulating two devices, Firestore emulator | Operations from Device A appear on Device B after sync |
 | Sync engine -- conflict resolution | Two devices edit same document offline, then sync | LWW produces correct winner, audit log has loser |
 | Sync engine -- partial failure | Firestore emulator with injected failures | Successful ops are committed, failed ops remain in queue |
 | Auth flow | Firebase Auth emulator | Sign up, sign in, session persistence, token refresh |
 | Cloud Functions -- task completion | Firestore emulator + Functions emulator | Points awarded, notification sent, streak updated |
 | Cloud Functions -- invite code | Functions emulator | Code generated, validated, expired code rejected |
 | Security rules | Firestore emulator with rules | Non-family-members cannot read family data. Children cannot delete tasks. Audit log is immutable. |
-| Recurring task generation | Isar with seed data, time manipulation | Correct instances generated for daily, weekly, monthly rules |
+| Recurring task generation | Drift with seed data, time manipulation | Correct instances generated for daily, weekly, monthly rules |
 
 ---
 
@@ -923,7 +928,7 @@ The implementation should proceed in vertical slices, each delivering a usable i
 
 | Phase | Effort (T-shirt) | Rationale |
 |-------|------------------|-----------|
-| Phase 1: Foundation | **L** | Core infrastructure: project setup, DI, Isar schemas, sync engine, connectivity monitor. High complexity, low UI. |
+| Phase 1: Foundation | **L** | Core infrastructure: project setup, DI, Drift schemas, sync engine, connectivity monitor. High complexity, low UI. |
 | Phase 2: Auth + Family | **M** | Firebase Auth, family creation/joining, member profiles, profile switching. Well-documented integrations. |
 | Phase 3: Task Management | **L** | Full task CRUD, recurring tasks, categories. The primary feature set with offline-first implications on every operation. |
 | Phase 4: Completion + Rewards | **M** | Task completion flow, points system, reward CRUD, redemption. Includes celebration animations. |
@@ -936,7 +941,7 @@ The implementation should proceed in vertical slices, each delivering a usable i
 **Phase 1: Foundation (Weeks 1-3)**
 1. Flutter project scaffolding with folder structure per development-rules.md (adapted for Flutter/Dart).
 2. Dependency injection setup (get_it + injectable).
-3. Isar database setup with all entity schemas and indexes.
+3. Drift database setup with all entity schemas and indexes.
 4. Connectivity monitor service (wrapping connectivity_plus).
 5. Sync engine: operation queue, FIFO processing, retry logic.
 6. Sync engine: conflict detection and LWW resolution.
@@ -945,7 +950,7 @@ The implementation should proceed in vertical slices, each delivering a usable i
 
 **Phase 2: Auth + Family (Weeks 4-5)**
 1. Firebase Auth integration (email, Google, Apple sign-in).
-2. Family creation flow (Firestore + Isar).
+2. Family creation flow (Firestore + Drift).
 3. Invite code generation and joining flow (Cloud Function + client).
 4. Member profile CRUD (local + synced).
 5. Profile switching UI and logic.
@@ -1176,8 +1181,8 @@ test/
 | Package | Version (pin) | Purpose |
 |---------|--------------|---------|
 | `flutter_bloc` | ^8.1.0 | State management (BLoC/Cubit) |
-| `isar` | ^3.1.0 | Local database |
-| `isar_flutter_libs` | ^3.1.0 | Isar platform bindings |
+| `drift` | ^2.18.0 | Local database (SQLite ORM) |
+| `sqlite3_flutter_libs` | ^0.6.0 | SQLite native binaries for Flutter |
 | `firebase_core` | ^2.25.0 | Firebase initialization |
 | `firebase_auth` | ^4.17.0 | Authentication |
 | `cloud_firestore` | ^4.15.0 | Remote database |
@@ -1214,7 +1219,7 @@ test/
 - [ ] **Data retention**: How long should completed task history be retained? Current assumption: indefinitely locally, 1 year in Firestore.
 - [ ] **Notification sound customization**: Should family members be able to choose custom notification sounds? Current assumption: default system sound only.
 - [ ] **Guest/temporary member**: Should there be support for temporary household helpers (babysitter, grandparent visiting)? Deferred to v2.
-- [ ] **Isar vs Drift re-evaluation**: Isar's development status should be verified before committing. If Isar is no longer actively maintained, Drift with its SQL query capabilities becomes the safer choice despite the document-vs-relational mismatch. A decision gate should be placed at the start of Phase 1.
+- [x] **Local DB decision (resolved)**: Drift is used. Isar 3.x requires Dart <3.0.0, incompatible with Dart 3.11.1. Drift provides equivalent query support (composite indexes, type-safe builders) with full Dart 3.x compatibility.
 
 ---
 
@@ -1225,7 +1230,7 @@ test/
 - `docs/design-system.md` -- Complete design token system, component library, and accessibility requirements
 - `docs/development-rules.md` -- SOLID principles, TDD workflow, Clean Code standards, git workflow, and project structure
 - [Firebase Documentation](https://firebase.google.com/docs) -- Auth, Firestore, Cloud Functions, FCM, Crashlytics, Analytics
-- [Isar Database Documentation](https://isar.dev) -- Local database for Flutter
+- [Drift Database Documentation](https://drift.dev) -- Local database for Flutter
 - [BLoC Library Documentation](https://bloclibrary.dev) -- State management pattern
 - [Material Design 3 Guidelines](https://m3.material.io) -- Component specifications and theming
 - [RFC 5545 (iCalendar)](https://tools.ietf.org/html/rfc5545) -- RRULE format reference for recurring tasks

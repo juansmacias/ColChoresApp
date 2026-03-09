@@ -1,0 +1,140 @@
+require "shellwords"
+
+default_platform(:android)
+
+def project_root
+  File.expand_path("..", __dir__)
+end
+
+def android_package_name
+  ENV["FASTLANE_ANDROID_PACKAGE_NAME"] ||
+    CredentialsManager::AppfileConfig.try_fetch_value(:package_name) ||
+    UI.user_error!("Missing Android package name. Set FASTLANE_ANDROID_PACKAGE_NAME or fastlane/Appfile package_name.")
+end
+
+def ios_bundle_identifier
+  ENV["FASTLANE_APP_IDENTIFIER"] ||
+    CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier) ||
+    UI.user_error!("Missing iOS bundle identifier. Set FASTLANE_APP_IDENTIFIER or fastlane/Appfile app_identifier.")
+end
+
+def app_store_connect_api_key_from_env
+  return nil if ENV["APP_STORE_CONNECT_KEY_ID"].to_s.empty?
+
+  issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]
+  key_path = ENV["APP_STORE_CONNECT_KEY_FILE"]
+  UI.user_error!("Missing APP_STORE_CONNECT_ISSUER_ID.") if issuer_id.to_s.empty?
+  UI.user_error!("Missing APP_STORE_CONNECT_KEY_FILE.") if key_path.to_s.empty?
+
+  app_store_connect_api_key(
+    key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+    issuer_id: issuer_id,
+    key_filepath: File.expand_path(key_path, project_root)
+  )
+end
+
+def ensure_file!(path, message)
+  UI.user_error!(message) unless File.exist?(path)
+  path
+end
+
+def ensure_booted_ios_simulator!(device)
+  sh("xcrun simctl bootstatus #{Shellwords.escape(device)} -b")
+end
+
+def screenshot_delay(options)
+  (options[:delay] || ENV["FASTLANE_SCREENSHOT_DELAY"] || 5).to_i
+end
+
+platform :android do
+  desc "Build a release APK with Flutter"
+  lane :build_apk do
+    sh("cd #{Shellwords.escape(project_root)} && flutter build apk --release")
+  end
+
+  desc "Build a release App Bundle with Flutter"
+  lane :build_aab do
+    sh("cd #{Shellwords.escape(project_root)} && flutter build appbundle --release")
+  end
+
+  desc "Install the debug APK on a booted emulator/device and capture a screenshot"
+  lane :screenshot do |options|
+    serial = options[:serial] || ENV["ANDROID_SERIAL"]
+    adb = serial.to_s.empty? ? "adb" : "adb -s #{Shellwords.escape(serial)}"
+    output = File.expand_path(options[:output] || "fastlane/screenshots/android/booted.png", project_root)
+    apk_path = File.expand_path("build/app/outputs/flutter-apk/app-debug.apk", project_root)
+
+    sh("cd #{Shellwords.escape(project_root)} && flutter build apk --debug")
+    ensure_file!(apk_path, "Missing debug APK at #{apk_path}.")
+    sh("#{adb} wait-for-device")
+    sh("#{adb} install -r #{Shellwords.escape(apk_path)}")
+    sh("#{adb} shell monkey -p #{android_package_name} -c android.intent.category.LAUNCHER 1")
+    sleep(screenshot_delay(options))
+    sh("mkdir -p #{Shellwords.escape(File.dirname(output))}")
+    sh("#{adb} exec-out screencap -p > #{Shellwords.escape(output)}")
+    UI.message("Saved Android screenshot to #{output}")
+  end
+
+  desc "Upload the release App Bundle to Google Play"
+  lane :deploy do |options|
+    track = options[:track] || ENV["FASTLANE_ANDROID_TRACK"] || "internal"
+    json_key = ENV["SUPPLY_JSON_KEY"] || ENV["SUPPLY_JSON_KEY_FILE"]
+    aab_path = File.expand_path("build/app/outputs/bundle/release/app-release.aab", project_root)
+
+    UI.user_error!("Missing SUPPLY_JSON_KEY or SUPPLY_JSON_KEY_FILE.") if json_key.to_s.empty?
+    sh("cd #{Shellwords.escape(project_root)} && flutter build appbundle --release")
+    ensure_file!(aab_path, "Missing Android App Bundle at #{aab_path}.")
+
+    upload_to_play_store(
+      track: track,
+      aab: aab_path,
+      package_name: android_package_name,
+      json_key: File.expand_path(json_key, project_root),
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+end
+
+platform :ios do
+  desc "Build a signed iOS IPA with Flutter"
+  lane :build_ipa do
+    sh("cd #{Shellwords.escape(project_root)} && flutter build ipa --release")
+  end
+
+  desc "Install the simulator build on a booted iOS simulator and capture a screenshot"
+  lane :screenshot do |options|
+    device = options[:device] || ENV["IOS_SIMULATOR_DEVICE"] || "booted"
+    output = File.expand_path(options[:output] || "fastlane/screenshots/ios/booted.png", project_root)
+    app_path = File.expand_path("build/ios/iphonesimulator/Runner.app", project_root)
+
+    sh("cd #{Shellwords.escape(project_root)} && flutter build ios --debug --simulator --no-codesign")
+    ensure_file!(app_path, "Missing simulator app bundle at #{app_path}.")
+    ensure_booted_ios_simulator!(device)
+    sh("xcrun simctl install #{Shellwords.escape(device)} #{Shellwords.escape(app_path)}")
+    sh("xcrun simctl terminate #{Shellwords.escape(device)} #{ios_bundle_identifier} || true")
+    sh("xcrun simctl launch #{Shellwords.escape(device)} #{ios_bundle_identifier}")
+    sleep(screenshot_delay(options))
+    sh("mkdir -p #{Shellwords.escape(File.dirname(output))}")
+    sh("xcrun simctl io #{Shellwords.escape(device)} screenshot #{Shellwords.escape(output)}")
+    UI.message("Saved iOS screenshot to #{output}")
+  end
+
+  desc "Upload the Flutter-built IPA to TestFlight"
+  lane :deploy do
+    ipa_dir = File.expand_path("build/ios/ipa", project_root)
+    api_key = app_store_connect_api_key_from_env
+
+    sh("cd #{Shellwords.escape(project_root)} && flutter build ipa --release")
+    ensure_file!(ipa_dir, "Missing IPA output directory at #{ipa_dir}.")
+    ipa_path = Dir[File.join(ipa_dir, "*.ipa")].first
+    UI.user_error!("No .ipa found in #{ipa_dir}.") if ipa_path.to_s.empty?
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: ipa_path,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

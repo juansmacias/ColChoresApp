@@ -1,23 +1,23 @@
-# Isar Database Schemas
+# Drift Database Schemas (formerly Drift)
 
 ## 1. Overview
 
 ### 1.1 Summary
 
-This specification defines every Isar collection (entity), embedded object, enum, index, and sync metadata field required by the Family Chores App. The local Isar database is the primary data source for all reads and the immediate target for all writes. It mirrors the Firestore document structure with additional sync metadata fields that enable the offline-first sync engine.
+This specification defines every Drift table (entity), nested JSON model, enum, index, and sync metadata field required by the Family Chores App. The local Drift database is the primary data source for all reads and the immediate target for all writes. It mirrors the Firestore document structure with additional sync metadata fields that enable the offline-first sync engine.
 
 ### 1.2 Business Context
 
-The offline-first architecture requires a fully functional local database that can serve the entire app without any network connectivity. Users must be able to create tasks, complete chores, redeem rewards, and view dashboards entirely from local data. The Isar schema design directly impacts query performance, sync reliability, and the user experience of instantaneous UI updates.
+The offline-first architecture requires a fully functional local database that can serve the entire app without any network connectivity. Users must be able to create tasks, complete chores, redeem rewards, and view dashboards entirely from local data. The Drift schema design directly impacts query performance, sync reliability, and the user experience of instantaneous UI updates.
 
 ### 1.3 Scope
 
 **In scope:**
-- 7 Isar collections: FamilyEntity, MemberEntity, TaskEntity, RewardEntity, RedemptionEntity, CategoryEntity, SyncOperationEntity
-- 1 embedded object: SubtaskEmbedded
+- 7 Drift table: FamiliesTable, MembersTable, TasksTable, RewardsTable, RedemptionsTable, CategoriesTable, SyncOperationsTable
+- 1 nested JSON model: SubtaskModel
 - 6 enums: SyncStatus, TaskStatus, AgeGroup, MemberRole, OperationType, RedemptionStatus
 - All composite indexes with purpose documentation
-- Isar initialization and multi-isolate configuration
+- Drift initialization and multi-isolate configuration
 - Schema migration strategy
 - Data retention and cleanup policies
 
@@ -28,7 +28,7 @@ The offline-first architecture requires a fully functional local database that c
 
 ### 1.4 References
 
-- `specs/00_project_foundation.md` -- Section 4.5 (Data Model), Section 4.5.2 (Isar Local Schema), Section 4.5.3 (Indexes)
+- `specs/00_project_foundation.md` -- Section 4.5 (Data Model), Section 4.5.2 (Drift Local Schema), Section 4.5.3 (Indexes)
 - `specs/01_project_scaffolding.md` -- DI modules (DatabaseModule), folder structure
 - `CLAUDE.md` -- Resolved decisions: 6-month retention, auto-approved rewards, chore rotation support
 
@@ -40,14 +40,14 @@ The offline-first architecture requires a fully functional local database that c
 
 | ID | Requirement | Priority | Acceptance Criteria |
 |----|-------------|----------|---------------------|
-| IS-001 | All 7 Isar collections open successfully | High | `Isar.open()` with all schemas completes without error |
-| IS-002 | Every field from the Firestore document model has a corresponding Isar field | High | 1:1 mapping verified for all entities, with Dart-appropriate types |
+| IS-001 | All 7 Drift table open successfully | High | `Drift.open()` with all schemas completes without error |
+| IS-002 | Every field from the Firestore document model has a corresponding Drift field | High | 1:1 mapping verified for all entities, with Dart-appropriate types |
 | IS-003 | Sync metadata fields exist on every syncable entity | High | `remoteId`, `syncStatus`, `lastSyncedAt` present on Family, Member, Task, Reward, Redemption, Category |
 | IS-004 | All indexes from the foundation spec are defined | High | Composite indexes match Section 4.5.3 exactly |
 | IS-005 | Enums are stored as name strings (not ordinal ints) | High | `@Enumerated(EnumType.name)` on all enum fields for migration safety |
-| IS-006 | Embedded objects serialize correctly | Medium | SubtaskEmbedded round-trips through Isar write/read |
+| IS-006 | Embedded objects serialize correctly | Medium | SubtaskModel round-trips through Drift write/read |
 | IS-007 | Schema version is tracked from day one | Medium | Migration infrastructure exists even if no migrations are needed yet |
-| IS-008 | SyncOperationEntity stores full operation queue data | High | All fields from Section 4.4.1 of foundation spec are present |
+| IS-008 | SyncOperationsTable stores full operation queue data | High | All fields from Section 4.4.1 of foundation spec are present |
 
 ### 2.2 Non-Functional Requirements
 
@@ -59,22 +59,22 @@ The offline-first architecture requires a fully functional local database that c
 
 ### 2.3 Assumptions
 
-- Isar v3.1.0 is the target version (pending decision gate from `specs/01_project_scaffolding.md` Section 14.3).
-- All entity IDs are UUIDs generated client-side (using the `uuid` package). The Isar auto-increment `Id` is used only for the local primary key.
-- Server timestamps from Firestore are stored as `DateTime` in Isar (UTC).
-- Photo files are stored on the local filesystem, not in Isar. Only the file path is stored in the entity.
+- Drift v3.1.0 is the target version (pending decision gate from `specs/01_project_scaffolding.md` Section 14.3).
+- All entity IDs are UUIDs generated client-side (using the `uuid` package). The Drift auto-increment `Id` is used only for the local primary key.
+- Server timestamps from Firestore are stored as `DateTime` in Drift (UTC).
+- Photo files are stored on the local filesystem, not in Drift. Only the file path is stored in the entity.
 
 ### 2.4 Constraints
 
-- Isar does not support relational joins. Relationships are modeled via ID references (string fields) and queried separately.
-- Isar enum storage must use `EnumType.name` (string), not `EnumType.ordinal` (int), to allow safe enum reordering in future versions.
-- Maximum Isar database size is configured at 64 MiB, sufficient for the 50 MB target with headroom.
+- Drift does not support relational joins. Relationships are modeled via ID references (string fields) and queried separately.
+- Drift enum storage must use `EnumType.name` (string), not `EnumType.ordinal` (int), to allow safe enum reordering in future versions.
+- Maximum Drift database size is configured at 64 MiB, sufficient for the 50 MB target with headroom.
 
 ---
 
 ## 3. Enums
 
-All enums are defined in a shared location (`lib/core/enums/`) and used across both domain entities and Isar models.
+All enums are defined in a shared location (`lib/core/enums/`) and used across both domain entities and Drift models.
 
 ```dart
 // lib/core/enums/sync_status.dart
@@ -179,12 +179,12 @@ enum RedemptionStatus {
 
 ```dart
 // lib/features/tasks/data/models/subtask_embedded.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 /// Represents a single subtask within a task's checklist.
-/// Stored as an embedded object inside TaskEntity.
+/// Stored as an nested JSON model inside TasksTable.
 @embedded
-class SubtaskEmbedded {
+class SubtaskModel {
   /// Title of the subtask (e.g., "Top rack", "Bottom rack").
   late String title;
 
@@ -197,17 +197,17 @@ class SubtaskEmbedded {
 
 ## 5. Entity Schemas
 
-### 5.1 FamilyEntity
+### 5.1 FamiliesTable
 
 ```dart
 // lib/features/family/data/models/family_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'family_entity.g.dart';
 
-@collection
-class FamilyEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class FamiliesTable {
+  Id id = Drift.autoIncrement;
 
   /// Firestore document ID. Null for locally-created families not yet synced.
   @Index(unique: true)
@@ -238,17 +238,17 @@ class FamilyEntity {
 }
 ```
 
-### 5.2 MemberEntity
+### 5.2 MembersTable
 
 ```dart
 // lib/features/family/data/models/member_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'member_entity.g.dart';
 
-@collection
-class MemberEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class MembersTable {
+  Id id = Drift.autoIncrement;
 
   @Index(unique: true)
   String? remoteId;
@@ -311,8 +311,8 @@ class MemberEntity {
 **Indexes:**
 
 ```dart
-@collection
-class MemberEntity {
+class extends Table
+class MembersTable {
   // ... fields above ...
 
   // Composite index: list members by family and role
@@ -320,7 +320,7 @@ class MemberEntity {
 }
 ```
 
-Note: The index `[familyId, role]` is defined via the `@Index` annotation on `familyId` above. For the composite, Isar requires:
+Note: The index `[familyId, role]` is defined via the `@Index` annotation on `familyId` above. For the composite, Drift requires:
 
 ```dart
 @Index(composite: [CompositeIndex('role')])
@@ -334,19 +334,19 @@ The updated field declaration replaces the simple `@Index()`:
 late String familyId;
 ```
 
-### 5.3 TaskEntity
+### 5.3 TasksTable
 
 The most complex entity, with the most indexes.
 
 ```dart
 // lib/features/tasks/data/models/task_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'task_entity.g.dart';
 
-@collection
-class TaskEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class TasksTable {
+  Id id = Drift.autoIncrement;
 
   @Index(unique: true)
   String? remoteId;
@@ -398,7 +398,7 @@ class TaskEntity {
   late bool requiresPhoto;
 
   /// Ordered list of subtasks (checklist items).
-  late List<SubtaskEmbedded> subtasks;
+  late List<SubtaskModel> subtasks;
 
   /// Timestamp when the task was marked completed.
   DateTime? completedAt;
@@ -433,8 +433,8 @@ class TaskEntity {
 **Indexes (from foundation spec Section 4.5.3):**
 
 ```dart
-@collection
-class TaskEntity {
+class extends Table
+class TasksTable {
   // ... fields ...
 
   // Index 1: Dashboard query - pending tasks sorted by due date
@@ -444,7 +444,7 @@ class TaskEntity {
 
   // Index 2: Member task list
   // Usage: "Show me all tasks assigned to Alex"
-  // Note: Isar supports indexing on List<String> for contains queries
+  // Note: Drift supports indexing on List<String> for contains queries
   @Index()
   late List<String> assigneeIds;
 
@@ -461,7 +461,7 @@ class TaskEntity {
 }
 ```
 
-**Implementation note on multiple composite indexes:** Isar allows multiple `@Index` annotations on the same field. The actual implementation will use the following pattern:
+**Implementation note on multiple composite indexes:** Drift allows multiple `@Index` annotations on the same field. The actual implementation will use the following pattern:
 
 ```dart
 // The familyId field carries multiple composite indexes.
@@ -476,17 +476,17 @@ class TaskEntity {
 late String familyId;
 ```
 
-### 5.4 RewardEntity
+### 5.4 RewardsTable
 
 ```dart
 // lib/features/rewards/data/models/reward_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'reward_entity.g.dart';
 
-@collection
-class RewardEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class RewardsTable {
+  Id id = Drift.autoIncrement;
 
   @Index(unique: true)
   String? remoteId;
@@ -525,17 +525,17 @@ class RewardEntity {
 }
 ```
 
-### 5.5 RedemptionEntity
+### 5.5 RedemptionsTable
 
 ```dart
 // lib/features/rewards/data/models/redemption_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'redemption_entity.g.dart';
 
-@collection
-class RedemptionEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class RedemptionsTable {
+  Id id = Drift.autoIncrement;
 
   @Index(unique: true)
   String? remoteId;
@@ -574,17 +574,17 @@ class RedemptionEntity {
 
 **Index:** `[memberId, redeemedAt]` -- "Member reward history" from foundation spec.
 
-### 5.6 CategoryEntity
+### 5.6 CategoriesTable
 
 ```dart
 // lib/features/tasks/data/models/category_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'category_entity.g.dart';
 
-@collection
-class CategoryEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class CategoriesTable {
+  Id id = Drift.autoIncrement;
 
   @Index(unique: true)
   String? remoteId;
@@ -613,22 +613,22 @@ class CategoryEntity {
 }
 ```
 
-### 5.7 SyncOperationEntity
+### 5.7 SyncOperationsTable
 
 The operation queue for the sync engine. This entity is local-only and never synced to Firestore.
 
 ```dart
 // lib/core/sync/models/sync_operation_entity.dart
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 
 part 'sync_operation_entity.g.dart';
 
 /// Represents a single pending synchronization operation.
 /// See specs/03_sync_engine.md for processing logic.
 /// See specs/00_project_foundation.md Section 4.4.1 for field definitions.
-@collection
-class SyncOperationEntity {
-  Id id = Isar.autoIncrement;
+class extends Table
+class SyncOperationsTable {
+  Id id = Drift.autoIncrement;
 
   /// Type of entity being synced: "task", "reward", "member", "family",
   /// "redemption", "category".
@@ -681,66 +681,66 @@ All indexes defined across entities, consolidated for reference:
 
 | Collection | Index Name | Fields | Purpose |
 |------------|-----------|--------|---------|
-| FamilyEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| MemberEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| MemberEntity | `familyId_role` | `[familyId, role]` | List parents vs children per family |
-| TaskEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| TaskEntity | `familyId_status_dueDate` | `[familyId, status, dueDate]` | Dashboard: pending tasks by due date |
-| TaskEntity | `familyId_completedAt` | `[familyId, completedAt]` | Fairness: completed tasks over time |
-| TaskEntity | `familyId_category` | `[familyId, category]` | Category-based filtering |
-| TaskEntity | `assigneeIds` | `assigneeIds` | Member task list (list index) |
-| RewardEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| RewardEntity | `familyId` | `familyId` | List rewards per family |
-| RedemptionEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| RedemptionEntity | `memberId_redeemedAt` | `[memberId, redeemedAt]` | Member reward history |
-| CategoryEntity | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
-| CategoryEntity | `familyId` | `familyId` | List categories per family |
-| SyncOperationEntity | `status_createdAt` | `[status, createdAt]` | Queue processing: FIFO order |
+| FamiliesTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| MembersTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| MembersTable | `familyId_role` | `[familyId, role]` | List parents vs children per family |
+| TasksTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| TasksTable | `familyId_status_dueDate` | `[familyId, status, dueDate]` | Dashboard: pending tasks by due date |
+| TasksTable | `familyId_completedAt` | `[familyId, completedAt]` | Fairness: completed tasks over time |
+| TasksTable | `familyId_category` | `[familyId, category]` | Category-based filtering |
+| TasksTable | `assigneeIds` | `assigneeIds` | Member task list (list index) |
+| RewardsTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| RewardsTable | `familyId` | `familyId` | List rewards per family |
+| RedemptionsTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| RedemptionsTable | `memberId_redeemedAt` | `[memberId, redeemedAt]` | Member reward history |
+| CategoriesTable | `remoteId` (unique) | `remoteId` | Lookup by Firestore ID |
+| CategoriesTable | `familyId` | `familyId` | List categories per family |
+| SyncOperationsTable | `status_createdAt` | `[status, createdAt]` | Queue processing: FIFO order |
 
 ---
 
-## 7. Isar Initialization
+## 7. Drift Initialization
 
 ### 7.1 Database Opening
 
 ```dart
 // Called from DatabaseModule in DI setup (specs/01_project_scaffolding.md Section 5.2)
-Future<Isar> openDatabase() async {
+Future<Drift> openDatabase() async {
   final dir = await getApplicationDocumentsDirectory();
-  return Isar.open(
+  return Drift.open(
     [
-      FamilyEntitySchema,
-      MemberEntitySchema,
-      TaskEntitySchema,
-      RewardEntitySchema,
-      RedemptionEntitySchema,
-      CategoryEntitySchema,
-      SyncOperationEntitySchema,
+      FamiliesTableSchema,
+      MembersTableSchema,
+      TasksTableSchema,
+      RewardsTableSchema,
+      RedemptionsTableSchema,
+      CategoriesTableSchema,
+      SyncOperationsTableSchema,
     ],
     directory: dir.path,
     name: 'family_chores',
     maxSizeMiB: 64,
-    inspector: kDebugMode, // Enable Isar Inspector in debug builds only
+    inspector: kDebugMode, // Enable Drift Inspector in debug builds only
   );
 }
 ```
 
 ### 7.2 Multi-Isolate Support
 
-The sync engine runs in a separate isolate (see `specs/03_sync_engine.md`). Isar supports concurrent access from multiple isolates when opened with the same name and directory:
+The sync engine runs in a separate isolate (see `specs/03_sync_engine.md`). Drift supports concurrent access from multiple isolates when opened with the same name and directory:
 
 ```dart
 // In the sync isolate:
-Future<Isar> openDatabaseInIsolate(String directoryPath) async {
-  return Isar.open(
+Future<Drift> openDatabaseInIsolate(String directoryPath) async {
+  return Drift.open(
     [
-      FamilyEntitySchema,
-      MemberEntitySchema,
-      TaskEntitySchema,
-      RewardEntitySchema,
-      RedemptionEntitySchema,
-      CategoryEntitySchema,
-      SyncOperationEntitySchema,
+      FamiliesTableSchema,
+      MembersTableSchema,
+      TasksTableSchema,
+      RewardsTableSchema,
+      RedemptionsTableSchema,
+      CategoriesTableSchema,
+      SyncOperationsTableSchema,
     ],
     directory: directoryPath,
     name: 'family_chores',  // Same name = same database
@@ -756,7 +756,7 @@ Future<Isar> openDatabaseInIsolate(String directoryPath) async {
 
 ```dart
 // On app termination or during testing:
-Future<void> closeDatabase(Isar isar) async {
+Future<void> closeDatabase(Drift isar) async {
   await isar.close();
 }
 ```
@@ -772,7 +772,7 @@ Even though this is a greenfield project, schema migration infrastructure is est
 ```dart
 // lib/core/constants/storage_constants.dart
 
-/// Current Isar schema version. Increment when any entity schema changes.
+/// Current Drift schema version. Increment when any entity schema changes.
 const int currentSchemaVersion = 1;
 
 /// Key used to store the schema version in SharedPreferences.
@@ -787,7 +787,7 @@ const String schemaVersionKey = 'isar_schema_version';
 /// Checks if the local database needs migration and executes it.
 class DatabaseMigrator {
   final SharedPreferences _prefs;
-  final Isar _isar;
+  final Drift _isar;
 
   DatabaseMigrator(this._prefs, this._isar);
 
@@ -811,9 +811,9 @@ class DatabaseMigrator {
 
 ### 8.3 Migration Rules
 
-1. **Additive changes** (new fields with defaults, new indexes): Isar handles these automatically. Increment schema version. No migration function needed.
+1. **Additive changes** (new fields with defaults, new indexes): Drift handles these automatically. Increment schema version. No migration function needed.
 2. **Field type changes** or **field removals**: Require a migration function that reads old data, transforms it, and writes new records. Increment schema version.
-3. **Collection additions**: Isar handles automatically when the new schema is added to `Isar.open()`.
+3. **Collection additions**: Drift handles automatically when the new schema is added to `Drift.open()`.
 4. **Collection removals**: Remove from schema list. Data is orphaned but harmless. Increment schema version.
 5. **Testing**: Every migration function must have a unit test with fixture data from the old schema version.
 
@@ -832,7 +832,7 @@ Per the resolved decision: completed task history is retained for 6 months in Fi
 class DatabaseCleanup {
   static const retentionDays = 180; // 6 months
 
-  final Isar _isar;
+  final Drift _isar;
 
   DatabaseCleanup(this._isar);
 
@@ -893,11 +893,11 @@ Every syncable entity follows this pattern. The three sync metadata fields are l
 
 ### 10.2 Serialization Exclusion
 
-When converting an Isar entity to a Firestore document, the three sync metadata fields are excluded:
+When converting an Drift table to a Firestore document, the three sync metadata fields are excluded:
 
 ```dart
 // In the model-to-Firestore-document mapper:
-Map<String, dynamic> toFirestoreMap(TaskEntity entity) {
+Map<String, dynamic> toFirestoreMap(TasksTable entity) {
   return {
     'title': entity.title,
     'description': entity.description,
@@ -915,21 +915,21 @@ Map<String, dynamic> toFirestoreMap(TaskEntity entity) {
 
 | Component | Type of Change | Risk Level | Notes |
 |-----------|---------------|------------|-------|
-| Isar database collections | New | Medium | 7 collections, all new. Incorrect schema = broken queries. |
-| Sync engine | Dependency | High | SyncOperationEntity is the queue. Schema must match engine expectations exactly. |
+| Drift database collections | New | Medium | 7 collections, all new. Incorrect schema = broken queries. |
+| Sync engine | Dependency | High | SyncOperationsTable is the queue. Schema must match engine expectations exactly. |
 | Repository implementations | Dependency | Medium | All CRUD operations depend on correct entity schemas. |
 | DI database module | Modified | Low | Must register all 7 schemas in correct order. |
-| Domain entities | Related | Low | Isar entities are data-layer models; domain entities are separate (Clean Architecture). |
+| Domain entities | Related | Low | Drift tables are data-layer models; domain entities are separate (Clean Architecture). |
 
 ### 11.2 Risk Assessment
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Isar schema change requires migration | Medium | High | Establish migration infrastructure from day one (Section 8). Test every migration. |
+| Drift schema change requires migration | Medium | High | Establish migration infrastructure from day one (Section 8). Test every migration. |
 | Index misconfiguration causes slow queries | Medium | Medium | Benchmark every composite index query with realistic data volume during Phase 1 testing. |
-| Embedded SubtaskEmbedded serialization issues | Low | Medium | Write roundtrip tests for embedded objects (Section 12). |
-| Isar list index on assigneeIds underperforms | Medium | Medium | Profile query performance. If slow, denormalize to a separate collection. |
-| Database size exceeds 64 MiB limit | Low | High | Monitor with Isar Inspector in debug builds. Implement cleanup policies (Section 9). |
+| Embedded SubtaskModel serialization issues | Low | Medium | Write roundtrip tests for embedded objects (Section 12). |
+| Drift list index on assigneeIds underperforms | Medium | Medium | Profile query performance. If slow, denormalize to a separate collection. |
+| Database size exceeds 64 MiB limit | Low | High | Monitor with Drift Inspector in debug builds. Implement cleanup policies (Section 9). |
 | Schema mismatch between main and sync isolates | Low | High | Extract schema list into a shared constant. Enforce via test. |
 
 ---
@@ -940,17 +940,17 @@ Map<String, dynamic> toFirestoreMap(TaskEntity entity) {
 
 | Test ID | Scenario | Given | When | Then | Priority |
 |---------|----------|-------|------|------|----------|
-| IS-FT-001 | Open database with all schemas | App starts for the first time | `Isar.open()` is called with all 7 schemas | Database opens successfully, all collections accessible | High |
-| IS-FT-002 | Write and read TaskEntity | A TaskEntity is constructed with all fields | Entity is written to Isar and read back by ID | All fields match, including embedded subtasks | High |
-| IS-FT-003 | Write and read MemberEntity | A MemberEntity with role=parent, PIN hash set | Entity is written and read back | All fields match, enum stored as name string | High |
+| IS-FT-001 | Open database with all schemas | App starts for the first time | `Drift.open()` is called with all 7 schemas | Database opens successfully, all collections accessible | High |
+| IS-FT-002 | Write and read TasksTable | A TasksTable is constructed with all fields | Entity is written to Drift and read back by ID | All fields match, including embedded subtasks | High |
+| IS-FT-003 | Write and read MembersTable | A MembersTable with role=parent, PIN hash set | Entity is written and read back | All fields match, enum stored as name string | High |
 | IS-FT-004 | Query tasks by family + status + dueDate | 10 tasks exist: 5 pending, 5 completed, across 2 families | Query for familyId=A, status=pending, ordered by dueDate | Returns exactly the pending tasks for family A, sorted | High |
 | IS-FT-005 | Query tasks by assigneeIds | Tasks assigned to [Alex], [Marcus], and [Alex, Marcus] | Query for tasks containing Alex's ID | Returns tasks assigned to Alex and tasks assigned to both | High |
 | IS-FT-006 | Query completed tasks for fairness | 20 completed tasks over 30 days for family A | Query familyId=A, completedAt in last 7 days | Returns only tasks completed in the last 7 days | High |
 | IS-FT-007 | SyncOperation FIFO ordering | 5 sync operations with different createdAt timestamps | Query status=pending, ordered by createdAt asc | Returns operations in chronological order | High |
-| IS-FT-008 | SubtaskEmbedded roundtrip | Task with 3 subtasks: 2 completed, 1 not | Write and read task | Subtask list preserves order, completion state, and titles | Medium |
-| IS-FT-009 | Unique remoteId constraint | Two TaskEntities with the same remoteId | Second write attempted | Isar throws unique constraint violation | Medium |
+| IS-FT-008 | SubtaskModel roundtrip | Task with 3 subtasks: 2 completed, 1 not | Write and read task | Subtask list preserves order, completion state, and titles | Medium |
+| IS-FT-009 | Unique remoteId constraint | Two TaskEntities with the same remoteId | Second write attempted | Drift throws unique constraint violation | Medium |
 | IS-FT-010 | Null remoteId for unsynced entity | Entity created locally, never synced | Entity written with remoteId=null | Write succeeds. Entity queryable by local ID. | Medium |
-| IS-FT-011 | SyncStatus enum stored as name | Entity with syncStatus=pending | Read raw Isar data | Stored value is the string "pending", not an integer | Medium |
+| IS-FT-011 | SyncStatus enum stored as name | Entity with syncStatus=pending | Read raw Drift data | Stored value is the string "pending", not an integer | Medium |
 | IS-FT-012 | Multi-isolate access | Main isolate writes a task | Sync isolate reads the same task | Task is visible in both isolates | High |
 | IS-FT-013 | Category query by family | 5 categories for family A, 3 for family B | Query familyId=A | Returns exactly 5 categories | Low |
 | IS-FT-014 | Redemption history by member | 10 redemptions for Alex over 3 months | Query memberId=Alex, ordered by redeemedAt desc | Returns all 10, newest first | Medium |
@@ -973,7 +973,7 @@ Map<String, dynamic> toFirestoreMap(TaskEntity entity) {
 ### 13.1 Suggested Approach
 
 1. Define all enums in `lib/core/enums/`.
-2. Define `SubtaskEmbedded` in the tasks feature models directory.
+2. Define `SubtaskModel` in the tasks feature models directory.
 3. Define all 7 entity classes with fields, annotations, and indexes.
 4. Run `dart run build_runner build` to generate `.g.dart` files.
 5. Implement `openDatabase()` in the DI database module.

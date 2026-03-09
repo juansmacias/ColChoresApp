@@ -1,0 +1,31 @@
+#!/bin/sh
+# Pre-commit hook — runs format, analysis, and unit tests.
+# Install via: sh scripts/setup_hooks.sh
+
+echo "Running pre-commit checks..."
+
+# 1. Format check
+echo "[1/3] Checking formatting..."
+dart format --set-exit-if-changed lib/ test/
+if [ $? -ne 0 ]; then
+  echo "ERROR: Code is not formatted. Run 'dart format lib/ test/' to fix."
+  exit 1
+fi
+
+# 2. Static analysis
+echo "[2/3] Running analysis..."
+dart analyze --fatal-infos
+if [ $? -ne 0 ]; then
+  echo "ERROR: Static analysis found issues. Fix them before committing."
+  exit 1
+fi
+
+# 3. Unit tests
+echo "[3/3] Running unit tests..."
+flutter test test/unit/ --no-pub
+if [ $? -ne 0 ]; then
+  echo "ERROR: Unit tests failed. Fix them before committing."
+  exit 1
+fi
+
+echo "All pre-commit checks passed."

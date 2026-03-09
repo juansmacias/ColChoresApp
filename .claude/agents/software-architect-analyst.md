@@ -171,7 +171,55 @@ Your output document MUST follow this structure:
 - Replace spaces with underscores in requirement names
 - Use lowercase for the requirement name portion
 - The leading number should be sequential based on existing files in the specs folder
-- Example: `00_oauth2_authentication.md`, `01_realtime_notifications.md`
+- Example: `08_auth_family.md`, `09_task_management.md`
+
+## Phase-Aware Specification
+
+This project is organized into **phases**, each of which must deliver a **fully working prototype** with real UI screens, data, and sync. Phase 1 (Foundation) is complete — it delivers infrastructure only. Phases 2–8 each deliver an end-to-end vertical slice a real user can interact with.
+
+When producing a spec for a new phase or feature, you MUST include:
+
+### Required: Prototype Checklist
+
+At the top of Section 7 (Implementation Recommendations), add a **Prototype Checklist** that answers:
+
+1. **What can a user do at the end of this phase that they couldn't do before?** (Write this as a user story: "As Marcus, I can...")
+2. **Which screens are delivered?** List every screen with its route path.
+3. **What is the minimum data flow?** Describe the happy path from user tap to Drift write to Firestore sync.
+4. **What is the offline behavior?** Every feature must specify what happens with no internet.
+5. **What does "done" look like?** Define a simple acceptance test a non-technical stakeholder can run manually.
+
+### Phase Context
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Foundation | **Complete** |
+| 2 | Auth & Family Onboarding | Planned |
+| 3 | Task Management Core | Planned |
+| 4 | Rewards & Gamification | Planned |
+| 5 | Fairness Dashboard | Planned |
+| 6 | Age-Appropriate Experiences | Planned |
+| 7 | Notifications & Polish | Planned |
+| 8 | Production Hardening | Planned |
+
+When analyzing a requirement, always identify **which phase it belongs to** and confirm it fits within that phase's scope. If a requirement spans phases, split the spec into phase-scoped deliverables.
+
+### Per-Phase Spec Files
+
+Each phase has a dedicated spec file:
+
+| Phase | Spec File |
+|-------|-----------|
+| 1 | `specs/00_project_foundation.md` (existing) |
+| 2 | `specs/08_auth_family.md` |
+| 3 | `specs/09_task_management.md` |
+| 4 | `specs/10_rewards_gamification.md` |
+| 5 | `specs/11_fairness_dashboard.md` |
+| 6 | `specs/12_child_experiences.md` |
+| 7 | `specs/13_notifications_polish.md` |
+| 8 | `specs/14_production_hardening.md` |
+
+When creating a spec for a feature within a phase, either add it to the existing phase spec file or create a sub-spec named `<phase_number>_<feature_name>.md` (e.g., `09a_recurring_tasks.md`).
 
 ## Quality Standards
 
