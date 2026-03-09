@@ -1,0 +1,6 @@
+app_identifier(ENV["FASTLANE_APP_IDENTIFIER"] || "com.juansmacias.familychores.familyChoresApp")
+package_name(ENV["FASTLANE_ANDROID_PACKAGE_NAME"] || "com.juansmacias.familychores.family_chores_app")
+
+apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"]
+itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"]) if ENV["FASTLANE_ITC_TEAM_ID"]
+team_id(ENV["FASTLANE_TEAM_ID"]) if ENV["FASTLANE_TEAM_ID"]
