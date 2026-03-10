@@ -19,6 +19,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignInWithGoogleRequested>(_onSignInWithGoogleRequested);
     on<SignOutRequested>(_onSignOutRequested);
 
+    add(AuthCurrentUserChanged(_authRepository.currentUserSync));
     _subscription = _authRepository.currentUser.listen(
       (user) => add(AuthCurrentUserChanged(user)),
     );

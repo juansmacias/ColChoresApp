@@ -38,6 +38,18 @@ void main() {
     'emits authenticated when auth stream provides a user',
     build: () => AuthBloc(authRepository),
     act: (_) => authController.add(user),
+    expect: () => [
+      const AuthUnauthenticated(),
+      const AuthAuthenticated(user),
+    ],
+  );
+
+  blocTest<AuthBloc, AuthState>(
+    'emits authenticated immediately when a cached user exists',
+    build: () {
+      when(() => authRepository.currentUserSync).thenReturn(user);
+      return AuthBloc(authRepository);
+    },
     expect: () => [const AuthAuthenticated(user)],
   );
 
@@ -64,6 +76,7 @@ void main() {
       ),
     ),
     expect: () => [
+      const AuthUnauthenticated(),
       const AuthLoading(),
       const AuthUnauthenticated(errorMessage: 'Invalid email or password.'),
     ],
@@ -78,6 +91,7 @@ void main() {
     },
     act: (bloc) => bloc.add(const SignOutRequested()),
     expect: () => [
+      const AuthUnauthenticated(),
       const AuthLoading(),
       const AuthUnauthenticated(),
     ],

@@ -26,6 +26,7 @@ class _FamilyChoresAppState extends State<FamilyChoresApp> {
   @override
   void initState() {
     super.initState();
+    _bootstrapNavigationState();
     _initializeDeepLinks();
   }
 
@@ -47,6 +48,24 @@ class _FamilyChoresAppState extends State<FamilyChoresApp> {
     _deepLinkSubscription = deepLinkService.incomingUris.listen(
       redirectCubit.setPendingLink,
     );
+  }
+
+  void _bootstrapNavigationState() {
+    final authBloc = getIt<AuthBloc>();
+    final familyBloc = getIt<FamilyBloc>();
+    final activeProfileCubit = getIt<ActiveProfileCubit>();
+
+    final authState = authBloc.state;
+    if (authState is AuthAuthenticated && familyBloc.state is FamilyInitial) {
+      familyBloc.add(FamilyCheckRequested(authState.user.uid));
+    }
+
+    final familyState = familyBloc.state;
+    if (familyState is FamilyLoaded ||
+        familyState is FamilyCreated ||
+        familyState is FamilyJoined) {
+      unawaited(activeProfileCubit.loadActiveProfile());
+    }
   }
 
   @override
