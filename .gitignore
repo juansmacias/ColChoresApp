@@ -65,6 +65,10 @@ firebase_options.dart
 google-services.json
 GoogleService-Info.plist
 .firebase/
+node_modules/
+package-lock.json
+functions/node_modules/
+functions/package-lock.json
 firebase-debug.log
 firestore-debug.log
 ui-debug.log

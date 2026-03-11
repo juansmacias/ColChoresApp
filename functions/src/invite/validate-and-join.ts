@@ -31,7 +31,7 @@ export const validateAndJoinFamily = onCall(
       throw new HttpsError('not-found', 'invite-code/not-found');
     }
 
-    const familyDoc = families.docs.first;
+    const familyDoc = families.docs[0];
     const familyData = familyDoc.data();
     const expiresAt = familyData.inviteCodeExpiresAt?.toDate?.();
     if (!expiresAt || expiresAt.getTime() < Date.now()) {
