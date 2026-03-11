@@ -31,11 +31,11 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.share_outlined),
           ),
           IconButton(
-            onPressed: () => context.go(RouteNames.profileSwitcher),
+            onPressed: () => context.push(RouteNames.profileSwitcher),
             icon: const Icon(Icons.switch_account_rounded),
           ),
           IconButton(
-            onPressed: () => context.go(RouteNames.settings),
+            onPressed: () => context.push(RouteNames.settings),
             icon: const Icon(Icons.settings_outlined),
           ),
         ],

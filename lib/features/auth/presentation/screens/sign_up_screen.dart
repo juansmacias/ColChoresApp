@@ -148,7 +148,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         TextButton(
                           onPressed: isLoading
                               ? null
-                              : () => context.go(RouteNames.signIn),
+                              : () {
+                                  if (context.canPop()) {
+                                    context.pop();
+                                    return;
+                                  }
+                                  context.go(RouteNames.signIn);
+                                },
                           child: const Text('Already have an account? Sign in'),
                         ),
                       ],

@@ -27,7 +27,7 @@ class FamilySetupScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => context.go(RouteNames.createFamily),
+                onPressed: () => context.push(RouteNames.createFamily),
                 child: const Text('Create a Family'),
               ),
             ),
@@ -35,7 +35,7 @@ class FamilySetupScreen extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => context.go(RouteNames.joinFamily),
+                onPressed: () => context.push(RouteNames.joinFamily),
                 child: const Text('Join with Invite Code'),
               ),
             ),

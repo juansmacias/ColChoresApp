@@ -120,7 +120,7 @@ class _SignInScreenState extends State<SignInScreen> {
                         TextButton(
                           onPressed: isLoading
                               ? null
-                              : () => context.go(RouteNames.signUp),
+                              : () => context.push(RouteNames.signUp),
                           child: const Text('Create an account'),
                         ),
                       ],

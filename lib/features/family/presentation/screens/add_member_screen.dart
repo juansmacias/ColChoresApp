@@ -80,7 +80,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
         title: const Text('Add Members'),
         actions: [
           TextButton(
-            onPressed: () => context.go(RouteNames.pinSetup),
+            onPressed: () => context.push(RouteNames.pinSetup),
             child: const Text('Continue'),
           ),
         ],

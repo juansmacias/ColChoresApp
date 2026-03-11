@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -42,8 +44,11 @@ class ProfileSwitcherScreen extends StatelessWidget {
                     isActive: activeProfile?.id == member.id,
                     onTap: () async {
                       if (member.isParent && member.hasPin) {
-                        context
-                            .go('${RouteNames.pinEntry}?memberId=${member.id}');
+                        unawaited(
+                          context.push(
+                            '${RouteNames.pinEntry}?memberId=${member.id}',
+                          ),
+                        );
                         return;
                       }
 
@@ -57,7 +62,7 @@ class ProfileSwitcherScreen extends StatelessWidget {
                   ),
                 ),
                 _AddMemberCard(
-                  onTap: () => context.go(RouteNames.addMember),
+                  onTap: () => unawaited(context.push(RouteNames.addMember)),
                 ),
               ],
             ),

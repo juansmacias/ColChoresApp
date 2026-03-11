@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:injectable/injectable.dart';
 
@@ -27,13 +28,13 @@ abstract class AuthRemoteDataSource {
 
 @LazySingleton(as: AuthRemoteDataSource)
 class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
-  FirebaseAuthRemoteDataSource(
-    this._firebaseAuth,
-    this._googleSignIn,
-  );
+  FirebaseAuthRemoteDataSource(this._firebaseAuth);
 
   final FirebaseAuth _firebaseAuth;
-  final GoogleSignIn _googleSignIn;
+  GoogleSignIn? _googleSignIn;
+
+  GoogleSignIn get _nativeGoogleSignIn =>
+      _googleSignIn ??= GoogleSignIn.standard();
 
   @override
   Stream<AppUser?> get currentUser =>
@@ -81,7 +82,14 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
 
   @override
   Future<AppUser> signInWithGoogle() async {
-    final googleUser = await _googleSignIn.signIn();
+    if (kIsWeb) {
+      final userCredential = await _firebaseAuth.signInWithPopup(
+        GoogleAuthProvider(),
+      );
+      return _mapUser(userCredential.user);
+    }
+
+    final googleUser = await _nativeGoogleSignIn.signIn();
     if (googleUser == null) {
       throw FirebaseAuthException(
         code: 'cancelled',
@@ -101,9 +109,14 @@ class FirebaseAuthRemoteDataSource implements AuthRemoteDataSource {
 
   @override
   Future<void> signOut() async {
+    if (kIsWeb) {
+      await _firebaseAuth.signOut();
+      return;
+    }
+
     await Future.wait<void>([
       _firebaseAuth.signOut(),
-      _googleSignIn.signOut(),
+      _nativeGoogleSignIn.signOut(),
     ]);
   }
 
