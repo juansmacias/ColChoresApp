@@ -90,7 +90,6 @@ firestore.indexes.json
 
 # Generated
 *.mocks.dart
-/lib/generated_plugin_registrant.dart
 
 # macOS
 /macos/Flutter/GeneratedPluginRegistrant.swift
